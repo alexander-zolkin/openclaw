@@ -5,6 +5,7 @@ import { waitForControlUiInitialRoster } from "../test-helpers/control-ui-e2e-re
 import { controlUiSessionUrl, installMockGateway } from "../test-helpers/control-ui-e2e.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 import { waitForSessionRosterHydration } from "./session-management.test-support.ts";
+import { seedSidebarGrouping } from "./sidebar-session-menu.test-support.ts";
 
 const suite = createControlUiE2eSuite({
   name: "Control UI sidebar selection overflow",
@@ -28,6 +29,7 @@ suite.define(() => {
         viewport: { height: 500, width },
       });
       const page = await context.newPage();
+      await seedSidebarGrouping(page);
       const sessionKey = "agent:main:dashboard:active-session";
       const sessions = Array.from({ length: overflow ? 40 : 3 }, (_, index) => ({
         key: index === 0 ? sessionKey : `agent:main:dashboard:session-${index}`,
@@ -133,6 +135,7 @@ suite.define(() => {
     const captureProof = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
     const context = await suite.newBrowserContext({ viewport: { height: 500, width: 1280 } });
     const page = await context.newPage();
+    await seedSidebarGrouping(page);
     const sessionKey = "agent:main:dashboard:focused-session";
     await installMockGateway(page, {
       methodResponses: {

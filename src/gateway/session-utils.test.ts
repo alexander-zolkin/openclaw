@@ -492,6 +492,48 @@ describe("gateway session utils", () => {
     expect(Object.keys(store)).toEqual(Object.keys(original));
   });
 
+  test("pinnedFirst keeps stale pins in a 200-row activity page without changing plain activity", async () => {
+    const cfg = createModelDefaultsConfig({ primary: "openai/gpt-5.4" });
+    const now = Date.now();
+    const store: Record<string, SessionEntry> = Object.fromEntries(
+      Array.from({ length: 201 }, (_, index) => [
+        `session-${index}`,
+        {
+          sessionId: `session-${index}`,
+          updatedAt: now - index,
+          lastActivityAt: now - 10_000 - index,
+        } satisfies SessionEntry,
+      ]),
+    );
+    store["old-pin"] = {
+      sessionId: "old-pin",
+      updatedAt: now - 1_000_000,
+      lastActivityAt: now - 1_000_000,
+      pinnedAt: now,
+    };
+
+    const plain = await listSessionFixture({
+      cfg,
+      storePath: "",
+      store,
+      opts: { sortBy: "activity", limit: 200 },
+    });
+    expect(plain.sessions).toHaveLength(200);
+    expect(plain.sessions[0]?.key).toBe("session-0");
+    expect(plain.sessions.some((row) => row.key === "old-pin")).toBe(false);
+
+    const pinnedFirst = await listSessionFixture({
+      cfg,
+      storePath: "",
+      store,
+      opts: { sortBy: "activity", pinnedFirst: true, limit: 200 },
+    });
+    expect(pinnedFirst.sessions).toHaveLength(200);
+    expect(pinnedFirst.sessions[0]?.key).toBe("old-pin");
+    expect(pinnedFirst.sessions.some((row) => row.key === "session-200")).toBe(false);
+    expect(pinnedFirst).toMatchObject({ totalCount: 202, nextOffset: 200, hasMore: true });
+  });
+
   test("Activity time filters use activity age without changing ordinary metadata filters", async () => {
     const cfg = createModelDefaultsConfig({ primary: "openai/gpt-5.4" });
     const now = 1_800_000_000_000;

@@ -38,6 +38,8 @@ export const SessionsListParamsSchema = closedObject({
       Type.Literal("activity"),
     ]),
   ),
+  /** Prefer manually pinned roots before the requested timestamp order. */
+  pinnedFirst: Type.Optional(Type.Boolean()),
   includeGlobal: Type.Optional(Type.Boolean()),
   includeUnknown: Type.Optional(Type.Boolean()),
   /** Exclude subagent sessions before facets and pagination. */

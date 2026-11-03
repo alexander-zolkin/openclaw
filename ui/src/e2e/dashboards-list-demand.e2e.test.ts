@@ -290,6 +290,8 @@ suite.define(() => {
             limit: SIDEBAR_SESSION_ROSTER_LIMIT,
             rowMode: "compact",
             source: "sidebar",
+            sortBy: "activity",
+            pinnedFirst: true,
           });
           await waitForControlUiRoute(page, { pathname: "/new", routeId: "new-session" });
           await page.waitForFunction(() => {

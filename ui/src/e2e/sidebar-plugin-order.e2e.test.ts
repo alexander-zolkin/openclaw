@@ -4,6 +4,7 @@ import type { Page } from "playwright";
 import { expect, it } from "vitest";
 import { installMockGateway } from "../test-helpers/control-ui-e2e.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
+import { seedSidebarGrouping } from "./sidebar-session-menu.test-support.ts";
 
 const suite = createControlUiE2eSuite({
   name: "Control UI plugin sidebar order mocked Gateway E2E",
@@ -24,6 +25,7 @@ suite.define(() => {
       viewport: { height: 900, width: 1200 },
     });
     const page = await context.newPage();
+    await seedSidebarGrouping(page);
     const gateway = await installMockGateway(page, {
       sessionGroups: ["Alpha", "Beta"],
       sessions: [

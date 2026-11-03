@@ -86,7 +86,7 @@ function projectDraftOwnership(
 
 function sortSidebarRows(
   rows: GatewaySessionRow[],
-  sortMode: "created" | "updated" | "people",
+  sortMode: "activity" | "created" | "updated" | "people",
   createdOrder: ReadonlyMap<string, number>,
   owners?: SessionsListResult["owners"],
 ) {
@@ -190,6 +190,21 @@ describe("sidebar session sort modes", () => {
     expect(sortSidebarRows(rows, "people", observed, owners)).toEqual([alex, sam]);
     owners[0] = { type: "human", id: "alex", label: "Zed" };
     expect(sortSidebarRows(rows, "people", observed, owners)).toEqual([sam, alex]);
+  });
+
+  it("orders activity by the later interaction/completion clock and stable key", () => {
+    const rows = [
+      { ...row("same-b", 1), lastActivityAt: 300 },
+      { ...row("interaction", 1), lastInteractionAt: 400 },
+      { ...row("same-a", 1), lastActivityAt: 300 },
+      { ...row("completion", 1), lastActivityAt: 500, lastInteractionAt: 200 },
+    ];
+    expect(sortSidebarRows(rows, "activity", new Map()).map((entry) => entry.key)).toEqual([
+      "completion",
+      "interaction",
+      "same-a",
+      "same-b",
+    ]);
   });
 });
 

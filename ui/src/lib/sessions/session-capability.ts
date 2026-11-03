@@ -72,7 +72,6 @@ export type SessionListOptions = SchemaContract<
     | "activityPulseBoundaries"
     | "activeOnly"
     | "requireLastInteraction"
-    | "sortBy"
     | "includeActivitySummary"
     | "label"
     | "projectId"
@@ -87,6 +86,7 @@ export type SessionListOptions = SchemaContract<
   >
 > & {
   source?: SessionsListParams["source"];
+  sortBy?: SessionsListParams["sortBy"];
   /** Physical read size for a managed window that needs every page enriched. */
   pageSize?: number;
   archivedFilter?: SessionArchivedFilter;

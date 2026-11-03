@@ -219,6 +219,8 @@ export function canApplySessionListSnapshot(
       (info.updatedAt === null ||
         info.updatedAt < (existing.updatedAt ?? 0) ||
         (info.snapshotAt !== undefined && info.snapshotAt < (existing.snapshotAt ?? 0)) ||
+        (options.pinnedFirst === true &&
+          (next.pinned !== existing.pinned || next.pinnedAt !== existing.pinnedAt)) ||
         (sortBy === "activity" &&
           sessionActivityTimestamp(next) < sessionActivityTimestamp(existing)))
     ) {
@@ -428,7 +430,7 @@ export function sessionListsNeedingEventRefresh(
           entry.snapshot.result,
           payload,
           entry.scope,
-          "updatedAt",
+          entry.query.sortBy === "activity" ? "activity" : "updatedAt",
           observedRow,
         ))
     ) {
@@ -445,6 +447,8 @@ export function isPrimarySessionListQuery(options: SessionListScope): boolean {
   const query = normalizeManagedSessionListQuery(options);
   return (
     query.archived === undefined &&
+    query.sortBy === undefined &&
+    query.pinnedFirst !== true &&
     !query.spawnedBy &&
     (query.boardFace ?? query.hasBoard) === undefined &&
     !query.activeMinutes &&

@@ -185,6 +185,8 @@ export type SidebarRecentSession = {
   createdAt?: number;
   startedAt?: number;
   updatedAt?: number | null;
+  lastActivityAt?: number;
+  lastInteractionAt?: number;
   endedAt?: number;
   runtimeMs?: number;
   runtimeSampledAt?: number;
@@ -343,9 +345,8 @@ export const SIDEBAR_HIDDEN_SESSION_CATALOGS_CHANGED_EVENT =
   "openclaw:sidebar-hidden-catalogs-changed";
 
 export function loadStoredSidebarSessionsGrouping(): SidebarSessionsGrouping {
-  return normalizeSidebarSessionsGrouping(
-    getSafeLocalStorage()?.getItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY),
-  );
+  const stored = getSafeLocalStorage()?.getItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY);
+  return stored == null ? "date" : normalizeSidebarSessionsGrouping(stored);
 }
 
 export function loadStoredSidebarCatalogGrouping(): CatalogProjectGrouping {
@@ -398,7 +399,7 @@ export function loadStoredSidebarSessionSortMode(): SidebarSessionSortMode {
   const stored = getSafeLocalStorage()?.getItem(SIDEBAR_SESSION_SORT_MODE_STORAGE_KEY);
   // "people" stays readable here even when the gateway later hides the
   // capability; effectiveSessionSortMode() downgrades it at render time.
-  return stored === "updated" || stored === "people" ? stored : "created";
+  return stored === "created" || stored === "updated" || stored === "people" ? stored : "activity";
 }
 
 function loadStoredSidebarStringSet(
@@ -535,6 +536,7 @@ export function setStoredSessionCatalogHidden(catalogId: string, hidden: boolean
 }
 
 export const SIDEBAR_SESSION_SORT_OPTIONS = [
+  { mode: "activity", labelKey: "chat.sidebar.sortActivity" },
   { mode: "created", labelKey: "chat.sidebar.sortCreated" },
   { mode: "updated", labelKey: "chat.sidebar.sortUpdated" },
   { mode: "people", labelKey: "sessionsView.owners" },

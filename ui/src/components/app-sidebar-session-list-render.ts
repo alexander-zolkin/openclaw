@@ -106,30 +106,46 @@ export function renderSessionSection(params: {
   // Pinned rows render in the nav zone; renderHeader records whether this list
   // section owns collapse UI or sits directly below the global toolbar.
   const collapsed = section.renderHeader && host.collapsedSessionSections.has(section.id);
-  const label = personOwner
-    ? personIdentity?.type === "profile"
-      ? presenceViewerLabel({ id: personIdentity.id, name: personOwner.label || personOwner.id })
-      : personOwner.label || personOwner.id
-    : section.project
-      ? section.project.name
-      : section.groups
-        ? t("chat.sidebar.groups")
-        : section.work
-          ? t("chat.sidebar.coding")
-          : group
-            ? group
-            : t("chat.sidebar.otherSessions");
-  const zone = personOwner
-    ? "person"
-    : section.project
-      ? "project"
-      : section.groups
-        ? "groups"
-        : section.work
-          ? "coding"
-          : group
-            ? "category"
-            : "threads";
+  const dateLabelKey = section.dateBucket
+    ? (
+        {
+          today: "sessionsView.dateToday",
+          yesterday: "sessionsView.dateYesterday",
+          week: "sessionsView.dateThisWeek",
+          month: "sessionsView.dateThisMonth",
+          older: "sessionsView.dateOlder",
+          "": "sessionsView.dateNoActivity",
+        } as const
+      )[section.dateBucket as "today" | "yesterday" | "week" | "month" | "older" | ""]
+    : undefined;
+  const label = dateLabelKey
+    ? t(dateLabelKey)
+    : personOwner
+      ? personIdentity?.type === "profile"
+        ? presenceViewerLabel({ id: personIdentity.id, name: personOwner.label || personOwner.id })
+        : personOwner.label || personOwner.id
+      : section.project
+        ? section.project.name
+        : section.groups
+          ? t("chat.sidebar.groups")
+          : section.work
+            ? t("chat.sidebar.coding")
+            : group
+              ? group
+              : t("chat.sidebar.otherSessions");
+  const zone = section.dateBucket
+    ? "date"
+    : personOwner
+      ? "person"
+      : section.project
+        ? "project"
+        : section.groups
+          ? "groups"
+          : section.work
+            ? "coding"
+            : group
+              ? "category"
+              : "threads";
   // Collapsed Coding still signals live runs so background work stays visible.
   const collapsedRunningDot =
     collapsed &&
@@ -145,7 +161,12 @@ export function renderSessionSection(params: {
   });
   // Person/project/agent sections are derived, not stored: dropping a session on
   // them cannot persist anything, so they take no drags at all.
-  const derivedSection = Boolean(personOwner || section.project || section.id.startsWith("agent:"));
+  const derivedSection = Boolean(
+    personOwner ||
+    section.project ||
+    section.dateBucket !== undefined ||
+    section.id.startsWith("agent:"),
+  );
   const sectionDropEnabled = groupWriteAccess.allowed && !derivedSection;
   const sectionClass = [
     "sidebar-recent-sessions__group",

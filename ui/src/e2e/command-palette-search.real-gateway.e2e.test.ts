@@ -371,6 +371,9 @@ suite.define(() => {
             : {}),
         },
         async ({ page }) => {
+          await page.addInitScript(() => {
+            localStorage.setItem("openclaw:sidebar:sessions:grouping", "category");
+          });
           await page.addInitScript((key) => {
             localStorage.setItem(key, JSON.stringify({ dismissedAtMs: 1770000000000 }));
           }, COMMUNITY_INVITE_KEY);

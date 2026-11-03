@@ -6,6 +6,7 @@ import {
   loadStoredCollapsedSessionSections,
   loadStoredHiddenSessionCatalogIds,
   loadStoredSidebarSessionSortMode,
+  loadStoredSidebarSessionsGrouping,
   loadStoredSidebarSessionStatusFilter,
   loadStoredSidebarSessionOwnerFilter,
   loadStoredSidebarSessionsShowPreview,
@@ -124,10 +125,10 @@ describe("sidebar session owner preference", () => {
 });
 
 describe("sidebar session sort preference", () => {
-  it("defaults absent and unknown stored values to created", () => {
-    expect(loadStoredSidebarSessionSortMode()).toBe("created");
+  it("defaults absent and unknown stored values to activity", () => {
+    expect(loadStoredSidebarSessionSortMode()).toBe("activity");
     localStorage.setItem("openclaw:sidebar:sessions:sort-mode", "unexpected");
-    expect(loadStoredSidebarSessionSortMode()).toBe("created");
+    expect(loadStoredSidebarSessionSortMode()).toBe("activity");
   });
 
   it("round-trips updated and people modes", () => {
@@ -140,6 +141,14 @@ describe("sidebar session sort preference", () => {
   it("stores created instead of a people sort the gateway denied", () => {
     expect(storeSidebarSessionSortMode("people", false)).toBe("created");
     expect(loadStoredSidebarSessionSortMode()).toBe("created");
+  });
+});
+
+describe("sidebar session grouping preference", () => {
+  it("defaults fresh profiles to dates and preserves an explicit grouping", () => {
+    expect(loadStoredSidebarSessionsGrouping()).toBe("date");
+    localStorage.setItem("openclaw:sidebar:sessions:grouping", "category");
+    expect(loadStoredSidebarSessionsGrouping()).toBe("category");
   });
 });
 

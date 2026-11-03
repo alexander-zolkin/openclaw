@@ -32,7 +32,10 @@ suite.define(() => {
   it("refetches instead of showing a row excluded by configured-agent filtering", async () => {
     const visibleLabel = "Visible configured session";
     const hiddenLabel = "Hidden unconfigured session";
-    const context = await suite.browser.newContext({ viewport: { height: 800, width: 1200 } });
+    const context = await suite.browser.newContext({
+      serviceWorkers: "block",
+      viewport: { height: 800, width: 1200 },
+    });
     const currentPage = await context.newPage();
     page = currentPage;
     const gateway = await installMockGateway(currentPage, {
@@ -149,6 +152,7 @@ suite.define(() => {
       ts: 1,
     };
     const context = await suite.browser.newContext({
+      serviceWorkers: "block",
       viewport: { height: 800, width: 1200 },
       ...(captureUiProof ? { recordVideo: { dir: suite.artifactDir } } : {}),
     });
@@ -209,7 +213,7 @@ suite.define(() => {
     await capture("before-startup-roster");
 
     const startupAndPageRequests = await gateway.getRequests("sessions.list");
-    expect(startupAndPageRequests[0]?.params).toEqual({
+    const startupSidebarQuery = {
       agentId: "main",
       configuredAgentsOnly: true,
       excludeDock: true,
@@ -220,13 +224,19 @@ suite.define(() => {
       limit: SIDEBAR_SESSION_ROSTER_LIMIT,
       rowMode: "compact",
       source: "sidebar",
-    });
+    };
+    expect(startupAndPageRequests[0]?.params).toEqual(startupSidebarQuery);
     expect
       .soft((await exactPageQueries()).map((request) => request.params))
       .toEqual([pageQueryParams]);
 
     await gateway.resolveDeferred("sessions.list", visibleResponse);
     await visibleRow.waitFor();
+    await expect
+      .poll(async () =>
+        (await gateway.getRequests("sessions.list")).map((request) => request.params),
+      )
+      .toContainEqual({ ...startupSidebarQuery, sortBy: "activity", pinnedFirst: true });
     await capture("after-startup-roster");
 
     const stabilityDeadline = Date.now() + 500;
@@ -255,7 +265,10 @@ suite.define(() => {
       ],
       ts: 1,
     };
-    const context = await suite.browser.newContext({ viewport: { height: 800, width: 1200 } });
+    const context = await suite.browser.newContext({
+      serviceWorkers: "block",
+      viewport: { height: 800, width: 1200 },
+    });
     const currentPage = await context.newPage();
     page = currentPage;
     const gateway = await installMockGateway(currentPage, {
@@ -336,7 +349,10 @@ suite.define(() => {
   });
 
   it("omits noncanonical numeric filters from sessions.list requests", async () => {
-    const context = await suite.browser.newContext({ viewport: { height: 800, width: 1200 } });
+    const context = await suite.browser.newContext({
+      serviceWorkers: "block",
+      viewport: { height: 800, width: 1200 },
+    });
     const currentPage = await context.newPage();
     page = currentPage;
     const gateway = await installMockGateway(currentPage, {

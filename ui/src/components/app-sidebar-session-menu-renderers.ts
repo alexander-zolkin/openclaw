@@ -361,8 +361,8 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
     host.sessionsShowCron ||
     host.sessionsShowSystem ||
     host.sessionsShowPreview ||
-    host.effectiveSessionSortMode() !== "created" ||
-    (!rosterMode && (grouping !== "category" || host.sessionsEmptyGroupsMode !== "filtering"));
+    host.effectiveSessionSortMode() !== "activity" ||
+    (!rosterMode && (grouping !== "date" || host.sessionsEmptyGroupsMode !== "filtering"));
   const ownerVisible = owners.length > 0 || ownerFilterId !== null || involvingMe;
   // The mobile sheet has no hover or room for flyouts: choices open as sheet pages.
   const sheet = isMobileNavLayout();
@@ -441,11 +441,13 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
                       host.sessionOrganizer.setSessionsShowCron(false);
                       host.sessionOrganizer.setSessionsShowSystem(false);
                       host.sessionOrganizer.setSessionsShowPreview(false);
-                      host.setSessionSortMode("created");
+                      host.setSessionSortMode("activity");
                       if (!rosterMode) {
                         // A displayed default can hide a saved Person choice until owners return.
-                        if (grouping !== "category") {
-                          host.sessionOrganizer.setSessionsGrouping("category");
+                        const hiddenPersonGrouping =
+                          host.sessionsGrouping === "person" && grouping === "category";
+                        if (!hiddenPersonGrouping && grouping !== "date") {
+                          host.sessionOrganizer.setSessionsGrouping("date");
                         }
                         host.setSessionsEmptyGroupsMode("filtering");
                       }
@@ -539,6 +541,7 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
                       ? [{ value: "person", label: t("sessionsView.groupByPerson") }]
                       : []),
                     { value: "none", label: t("sessionsView.groupByNone") },
+                    { value: "date", label: t("sessionsView.groupByDate") },
                   ],
                   onChange: (value) =>
                     host.sessionOrganizer.setSessionsGrouping(value as SidebarSessionsGrouping),

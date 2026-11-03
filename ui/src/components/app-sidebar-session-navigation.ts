@@ -168,6 +168,11 @@ export class AppSidebarSessionNavigationElement extends AppSidebarBase {
 
   setSessionSortMode(mode: SidebarSessionSortMode) {
     this.sessionSortMode = storeSidebarSessionSortMode(mode, this.sessionPeopleSortCapability());
+    void this.sessionData.refreshSidebarSessions();
+  }
+
+  sidebarSessionSortMode(): SidebarSessionSortMode {
+    return this.effectiveSessionSortMode();
   }
 
   private readonly sessionOwnerFilter = new SessionOwnerFilterController(this, () => this.context);

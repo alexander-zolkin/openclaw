@@ -8,7 +8,7 @@ import { takeControlUiViewportScreenshot } from "../test-helpers/control-ui-e2e-
 import {
   controlUiSessionPath,
   controlUiSessionUrl,
-  installMockGateway,
+  installMockGateway as installMockGatewayBase,
   startControlUiE2eServer,
   waitForConfirmModal,
   type MockGatewayControls,
@@ -16,7 +16,17 @@ import {
 } from "../test-helpers/control-ui-e2e.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 
-export { controlUiSessionPath, controlUiSessionUrl, installMockGateway, waitForConfirmModal };
+export { controlUiSessionPath, controlUiSessionUrl, waitForConfirmModal };
+
+type MockGatewayOptions = Parameters<typeof installMockGatewayBase>[1];
+
+/** Group-management E2Es assert category sections, so seed that explicit view. */
+export async function installMockGateway(page: Page, options?: MockGatewayOptions) {
+  await page.addInitScript(() => {
+    localStorage.setItem("openclaw:sidebar:sessions:grouping", "category");
+  });
+  return installMockGatewayBase(page, options);
+}
 
 export const collapsedSessionSectionsStorageKey = "openclaw:sidebar:sessions:collapsed-sections";
 export const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
