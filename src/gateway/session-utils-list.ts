@@ -64,14 +64,16 @@ export function* selectSessionEntries(
   const limit = resolveOptionalIntegerOption(params.opts.limit, { min: 1 }) ?? params.defaultLimit;
   const offset = resolveNonNegativeIntegerOption(params.opts.offset, 0);
   const windowLimit = resolveSessionsListWindowLimit(limit, offset);
-  const sortedWindow = params.entriesSorted
-    ? filtered.slice(0, windowLimit)
-    : yield* sortAndLimitSessionEntries(
-        filtered,
-        windowLimit,
-        params.opts.sortBy,
-        params.shouldYield,
-      );
+  const sortedWindow =
+    params.entriesSorted && params.opts.pinnedFirst !== true
+      ? filtered.slice(0, windowLimit)
+      : yield* sortAndLimitSessionEntries(
+          filtered,
+          windowLimit,
+          params.opts.sortBy,
+          params.shouldYield,
+          params.opts.pinnedFirst === true,
+        );
   const sharedEntries =
     limit === undefined ? sortedWindow.slice(offset) : sortedWindow.slice(offset, offset + limit);
   let entries = sharedEntries;
@@ -85,6 +87,7 @@ export function* selectSessionEntries(
           ownerLimit,
           params.opts.sortBy,
           params.shouldYield,
+          params.opts.pinnedFirst === true,
         );
     ownerCount = owned.length;
     const ownedKeys = new Set(owned.map(([key]) => key));
@@ -410,7 +413,7 @@ export async function prepareSessionSearchIdentityNames(
 ) {
   const prepared = prepareSessionRowSelection(projection, opts, {
     metadataPrepared,
-    ordered: true,
+    ordered: opts.pinnedFirst !== true,
   });
   const scope = projection.state.scope(opts);
   const agentIds = new Set(scope.agentId ? [scope.agentId] : listAgentIds(prepared.cfg));
@@ -460,7 +463,7 @@ export function prepareProjectedSessionList(params: {
     now,
     rowContext: presentation.rowContext,
     metadataPrepared: params.metadataPrepared,
-    ordered: true,
+    ordered: opts.pinnedFirst !== true,
     candidateSessionIdsOrKeys: opts.activeOnly
       ? projectRun?.candidateSessionIdsOrKeys()
       : undefined,
@@ -471,7 +474,7 @@ export function prepareProjectedSessionList(params: {
   const filters: SessionListFilterParams = {
     ...prepared,
     identityNames: params.searchIdentities?.names,
-    entriesSorted: true,
+    entriesSorted: opts.pinnedFirst !== true,
     involvingActorId: opts.involvingMe ? identity : undefined,
     ownerFirstActorId: opts.ownerFirst ? identity : undefined,
     restrictProfileReferences: client !== undefined,

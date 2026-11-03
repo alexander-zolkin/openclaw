@@ -230,6 +230,7 @@ export class SidebarSessionProjection {
         selfOwnerId,
         sectionOrder,
         catalogIds,
+        now: this.now(),
       }).filter(
         (section) =>
           section.id !== "pinned" &&

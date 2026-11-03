@@ -14,6 +14,7 @@ export function recentPlaces(
   rows: readonly RecentPlaceSource[],
   opts: {
     workspace: string;
+    execNode?: string;
     allowGatewayFolder: (folder: string) => boolean;
   },
 ): RecentPlace[] {
@@ -24,7 +25,12 @@ export function recentPlaces(
     const folder =
       normalizeOptionalString(row.execCwd) ?? normalizeOptionalString(row.worktree?.repoRoot);
     const execNode = normalizeOptionalString(row.execNode);
-    if (!folder || execNode || folder === opts.workspace || !opts.allowGatewayFolder(folder)) {
+    if (
+      !folder ||
+      (opts.execNode ? execNode !== opts.execNode : Boolean(execNode)) ||
+      folder === opts.workspace ||
+      (!opts.execNode && !opts.allowGatewayFolder(folder))
+    ) {
       continue;
     }
     if (seen.has(folder)) {

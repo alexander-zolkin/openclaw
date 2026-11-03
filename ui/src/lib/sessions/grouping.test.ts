@@ -13,6 +13,29 @@ import {
 } from "./grouping.ts";
 
 describe("groupSidebarSessionRows", () => {
+  it("groups sidebar sessions by activity date, keeps pins separate, and orders the month bucket", () => {
+    const now = new Date(2026, 10, 3, 12).getTime();
+    const sections = groupSidebarSessionRows(
+      [
+        row({ key: "pinned", pinned: true, lastActivityAt: now - 50 * 86400000 }),
+        row({ key: "today", lastInteractionAt: now - 1000 }),
+        row({ key: "week", lastActivityAt: now - 3 * 86400000 }),
+        row({ key: "month", lastActivityAt: now - 14 * 86400000 }),
+        row({ key: "older", lastActivityAt: now - 40 * 86400000 }),
+      ],
+      { grouping: "date", now },
+    );
+    expect(sections.map((section) => section.id)).toEqual([
+      "pinned",
+      "date:today",
+      "date:week",
+      "date:month",
+      "date:older",
+      "work",
+    ]);
+    expect(sections[0]?.rows.map((item) => item.key)).toEqual(["pinned"]);
+  });
+
   it("groups owners by identity even when they share a checkout", () => {
     const workContext = { name: "shared", path: "/repos/shared" };
     const sections = groupSidebarSessionRows(
@@ -481,13 +504,13 @@ describe("moveSessionSection", () => {
 });
 
 describe("normalizeSidebarSessionsGrouping", () => {
-  it("accepts supported modes and falls back to category grouping", () => {
+  it("accepts supported modes and falls back to date grouping", () => {
     expect(normalizeSidebarSessionsGrouping("none")).toBe("none");
     expect(normalizeSidebarSessionsGrouping("person")).toBe("person");
     expect(normalizeSidebarSessionsGrouping("project")).toBe("project");
     expect(normalizeSidebarSessionsGrouping("category")).toBe("category");
-    expect(normalizeSidebarSessionsGrouping(null)).toBe("category");
-    expect(normalizeSidebarSessionsGrouping("bogus")).toBe("category");
+    expect(normalizeSidebarSessionsGrouping(null)).toBe("date");
+    expect(normalizeSidebarSessionsGrouping("bogus")).toBe("date");
   });
 });
 

@@ -99,7 +99,10 @@ export function resolveCheckoutChip(params: {
   headBranch?: string;
   baseRef: string;
   repository?: boolean;
+  deviceFolder?: boolean;
 }): CheckoutChipState {
+  if (params.deviceFolder && !params.worktree)
+    return { label: t("newSession.checkoutDeviceFolder") };
   const worktreeName = params.worktreeName.trim();
   if (params.worktree && !params.repository && worktreeName) {
     return { label: t("newSession.checkoutWorktreeNamed", { name: worktreeName }) };
@@ -298,6 +301,7 @@ function renderWorktreeFields(params: {
 export function renderCheckoutChip(params: {
   state: CheckoutChipState;
   remotePlacement: boolean;
+  deviceFolderAvailable?: boolean;
   repository?: boolean;
   folderLabel: string;
   worktree: boolean;
@@ -357,12 +361,19 @@ export function renderCheckoutChip(params: {
             : html`${renderSessionMenuItem(
                 {
                   value: "checkout",
-                  label: t("newSession.checkoutCurrent"),
+                  label: t(
+                    params.deviceFolderAvailable
+                      ? "newSession.checkoutDeviceFolder"
+                      : "newSession.checkoutCurrent",
+                  ),
                   icon: icons.folder,
                   sub: params.branches?.headBranch,
                   checked: !params.worktree,
-                  disabled: params.remotePlacement,
-                  title: params.remotePlacement ? t("newSession.checkoutRemoteLocked") : undefined,
+                  disabled: params.remotePlacement && !params.deviceFolderAvailable,
+                  title:
+                    params.remotePlacement && !params.deviceFolderAvailable
+                      ? t("newSession.checkoutRemoteLocked")
+                      : undefined,
                   onSelect: () => params.onSelectWorktree(false),
                   keepOpen: true,
                 },

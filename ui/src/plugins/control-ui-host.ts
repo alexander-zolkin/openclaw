@@ -344,6 +344,7 @@ export function createControlUiPluginHost(
       },
       registerAction: (value) => runtime.register(owner, "actions", value),
       registerAccessory: (value) => runtime.register(owner, "accessories", value),
+      registerUserMessageEffect: (value) => runtime.register(owner, "userMessageEffects", value),
       registerWidget: (value) => runtime.register(owner, "widgets", value),
       registerReplacement: (value) => runtime.register(owner, "replacements", value),
       selectReplacement(surface, id) {

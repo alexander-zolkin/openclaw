@@ -147,6 +147,7 @@ export function createDraftFixture(options: FixtureOptions = {}) {
     () => ({
       context,
       isAdmin: place?.isAdmin() ?? false,
+      nodeId: place?.directDevice ? place.deviceId : undefined,
     }),
     {
       requestUpdate: vi.fn(),

@@ -30,6 +30,7 @@ export {
   isSidebarSlotVisible,
   fitSidebarLayout,
   initializeBrowserSidebarWidth,
+  sidebarPanelSizeForFraction,
   SIDEBAR_MIN_WIDTH_PX,
   SIDEBAR_MIN_HEIGHT_PX,
   SIDEBAR_NARROW_BREAKPOINT_PX,
@@ -147,20 +148,52 @@ function selectPanel(layout: SidebarLayout, column: SidebarColumn, panelId: stri
   }
 }
 
-export function openSlot(layout: SidebarLayout, slot: SidebarSlotId): SidebarLayout {
-  const next = structuredClone(layout);
+export function openSlot(
+  layout: SidebarLayout,
+  slot: SidebarSlotId,
+  presentation?: {
+    dock?: SidebarDock;
+    promote?: boolean;
+    sideFraction?: number;
+  },
+): SidebarLayout {
+  let next = structuredClone(layout);
   if ((sidebarMainPanel(next)?.slot ?? "conversation") === slot) {
-    return next.expandedSide ? setSidebarExpanded(next, false) : next;
+    if (next.expandedSide) next = setSidebarExpanded(next, false);
+  } else {
+    const column =
+      next.columns.find((entry) => entry.panels.some((panel) => panel.slot === slot)) ??
+      (next.columns[0] ??= createSidebarColumn());
+    let panel = column.panels.find((entry) => entry.slot === slot);
+    if (!panel) {
+      panel = { id: nextPanelId(next, slot), slot };
+      column.panels.push(panel);
+    }
+    selectPanel(next, column, panel.id);
   }
-  const column =
-    next.columns.find((entry) => entry.panels.some((panel) => panel.slot === slot)) ??
-    (next.columns[0] ??= createSidebarColumn());
-  let panel = column.panels.find((entry) => entry.slot === slot);
-  if (!panel) {
-    panel = { id: nextPanelId(next, slot), slot };
-    column.panels.push(panel);
+  if (
+    presentation?.dock === "bottom" ||
+    presentation?.dock === "right" ||
+    presentation?.dock === "left"
+  )
+    next.dock = presentation.dock;
+  const panel = next.columns[0]?.panels.find((entry) => entry.slot === slot);
+  if (presentation?.promote === true && panel) {
+    next = ensureSidebarConversation(promoteSidebarPanel(next, panel.id));
+    next.open = true;
+    next.expanded = false;
+    delete next.expandedSide;
   }
-  selectPanel(next, column, panel.id);
+  const fraction = presentation?.sideFraction;
+  if (
+    next.columns[0] &&
+    typeof fraction === "number" &&
+    Number.isFinite(fraction) &&
+    fraction > 0 &&
+    fraction < 1
+  ) {
+    next.columns[0].sideFractionPending = fraction;
+  }
   return next;
 }
 
@@ -297,6 +330,7 @@ export function resizeSidebarPanel(
   const next = structuredClone(layout);
   const column = next.columns.find((entry) => entry.id === columnId);
   if (column && Number.isFinite(size)) {
+    delete column.sideFractionPending;
     if (sidebarDock(next) === "bottom") {
       column.height = clampHeight(size);
     } else {

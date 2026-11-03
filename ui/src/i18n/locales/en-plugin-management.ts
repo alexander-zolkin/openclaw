@@ -137,6 +137,11 @@ const enPluginManagement = {
         name: "Session accessories",
         description: "Adds information or controls alongside sessions.",
       },
+      "message-effect": {
+        name: "Message effects",
+        description:
+          "Adds presentation effects to newly sent user messages in the chat transcript.",
+      },
       widget: { name: "Dashboard widgets", description: "Adds widgets to the dashboard." },
       replacement: {
         name: "Interface replacements",

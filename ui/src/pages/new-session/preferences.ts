@@ -69,6 +69,7 @@ export type NewSessionPreference = {
   remoteProject?: DraftRemoteProject | null;
   defaultRepositoryOptOut?: boolean;
   worktree?: boolean;
+  deviceMode?: "folder" | "managed";
   freshWorkspace?: boolean;
   baseRef?: string;
   worktreeName?: string;
@@ -93,6 +94,7 @@ export function resolveNewSessionFolderPreference(
   const storedFolder = preference?.folder ?? "";
   const workspaceMoved =
     Boolean(storedFolder) &&
+    !(preference?.where?.kind === "device" && preference.deviceMode === "folder") &&
     storedFolder === preference?.workspace &&
     preference.workspace !== workspace;
   const folder = storedFolder && !workspaceMoved ? storedFolder : workspace;
@@ -143,6 +145,8 @@ function normalizePreference(value: unknown): NewSessionPreference | null {
   ) {
     preference.fastMode = value.fastMode;
   }
+  if (value.deviceMode === "folder" || value.deviceMode === "managed")
+    preference.deviceMode = value.deviceMode;
   if (typeof value.worktree === "boolean") {
     preference.worktree = value.worktree;
   }

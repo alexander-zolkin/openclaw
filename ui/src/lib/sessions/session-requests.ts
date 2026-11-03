@@ -86,6 +86,7 @@ export function buildSessionListParams(options: SessionListOptions = {}): Sessio
     configuredAgentsOnly: true,
     excludeDock: options.excludeDock ?? true,
   };
+  if (options.sortBy) params.sortBy = options.sortBy;
   if (options.limit === undefined) {
     params.limit = DEFAULT_SESSION_LIST_QUERY.limit;
   } else if (options.limit > 0) {
@@ -110,6 +111,7 @@ export function buildSessionListParams(options: SessionListOptions = {}): Sessio
     "includeOwnerSessionCounts",
     "ownerFirst",
     "involvingMe",
+    "pinnedFirst",
   ] as const) {
     if (options[key] === true) {
       params[key] = true;

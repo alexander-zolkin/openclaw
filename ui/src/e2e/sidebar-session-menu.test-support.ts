@@ -1,5 +1,12 @@
 import type { Locator, Page } from "playwright";
 
+/** Seed the legacy category view when an E2E scenario asserts category sections. */
+export async function seedSidebarGrouping(page: Page, grouping = "category") {
+  await page.addInitScript((value) => {
+    localStorage.setItem("openclaw:sidebar:sessions:grouping", value);
+  }, grouping);
+}
+
 export async function openSidebarMenu(page: Page) {
   const menu = page.locator(".sidebar-session-sort-menu");
   const trigger = page.getByRole("button", { name: "Filter & sort", exact: true });

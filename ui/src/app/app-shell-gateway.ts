@@ -289,6 +289,8 @@ export class ShellGatewayOwner {
               : {}),
             ...(sessionKey ? { sessionKey } : {}),
             ...(command.dock ? { dock: command.dock } : {}),
+            promote: command.promote,
+            sideFraction: command.sideFraction,
             ...(command.panel === "terminal" && command.terminalSessionId
               ? { terminalSessionId: command.terminalSessionId }
               : {}),

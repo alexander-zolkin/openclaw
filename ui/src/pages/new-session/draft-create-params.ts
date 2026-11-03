@@ -18,14 +18,17 @@ export function buildSelectedSessionCreateParams(
     contextWindow: place.modelControl.contextWindow,
     thinkingLevel: place.modelControl.thinkingLevel,
     fastMode: place.modelControl.fastMode,
-    projectId: place.browser.remoteProject?.projectId ?? place.browser.projectId,
-    projectGitUrl: place.browser.remoteProject?.cloneUrl,
-    repository: place.remoteRepository,
+    projectId: place.directDevice
+      ? undefined
+      : (place.browser.remoteProject?.projectId ?? place.browser.projectId),
+    projectGitUrl: place.directDevice ? undefined : place.browser.remoteProject?.cloneUrl,
+    repository: place.directDevice ? undefined : place.remoteRepository,
     worktree: place.worktree,
     worktreeSource: place.freshWorkspace ? "empty" : undefined,
     baseRef: place.baseRef,
     worktreeName: place.worktreeName,
     cwd: place.folder,
+    execNode: place.directDevice ? place.deviceId : undefined,
     workspace: place.workspacePath(),
   });
 }

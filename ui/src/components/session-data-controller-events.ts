@@ -100,15 +100,21 @@ export function subscribeSidebarAgentSessionCaches(
 type SidebarSessionQueryOwner = {
   sidebarSessionOwnerFilter(): SidebarSessionOwnerFilter;
   sidebarSessionStatusFilter(): SidebarSessionStatusFilter;
+  sidebarSessionSortMode?(): "activity" | "updated" | "created" | "people";
 };
 
 export function hasSidebarListFilter(owner: SidebarSessionQueryOwner): boolean {
   const { ownerId, involvingMe } = owner.sidebarSessionOwnerFilter();
-  return owner.sidebarSessionStatusFilter() !== "active" || Boolean(ownerId || involvingMe);
+  return (
+    owner.sidebarSessionStatusFilter() !== "active" ||
+    Boolean(ownerId || involvingMe) ||
+    owner.sidebarSessionSortMode?.() === "activity"
+  );
 }
 
 export function sidebarSessionListQuery(owner: SidebarSessionQueryOwner, agentId: string) {
   const { ownerId, involvingMe } = owner.sidebarSessionOwnerFilter();
+  const activitySort = owner.sidebarSessionSortMode?.() === "activity";
   return {
     source: "sidebar",
     excludeDock: true,
@@ -116,6 +122,7 @@ export function sidebarSessionListQuery(owner: SidebarSessionQueryOwner, agentId
     involvingMe: involvingMe || undefined,
     agentId,
     archivedFilter: owner.sidebarSessionStatusFilter(),
+    ...(activitySort ? { sortBy: "activity" as const, pinnedFirst: true } : {}),
     limit: SIDEBAR_SESSION_ROSTER_LIMIT,
     rowMode: "compact",
     includeDerivedTitles: true,

@@ -4,6 +4,7 @@ import type { SessionTranscriptRuntimeTarget } from "../../config/sessions/sessi
 import { onAgentEventForRun } from "../../infra/agent-events.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { resolvePreparedRunAdmission } from "../admitted-run-context.js";
+import { resolveAgentWorkspaceDir } from "../agent-scope-config.js";
 import { stripOpenClawMcpToolPrefix } from "../cli-runner/tool-policy.js";
 import { normalizeToolPolicyName } from "../tool-policy.js";
 import { isToolResultError } from "../tool-result-error.js";
@@ -153,6 +154,12 @@ export async function runEmbeddedAgentViaCliBackendIfEligible(
       trigger: params.trigger,
       sessionFile,
       workspaceDir: params.workspaceDir,
+      cwd: params.cwd,
+      bootstrapWorkspaceDir:
+        params.bootstrapWorkspaceDir ??
+        (params.config && params.agentId
+          ? resolveAgentWorkspaceDir(params.config, params.agentId)
+          : undefined),
       agentDir: params.agentDir,
       config: params.config,
       prompt: params.prompt,

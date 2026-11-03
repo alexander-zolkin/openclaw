@@ -245,6 +245,9 @@ export function renderChatPaneComposerControls(params: {
               client,
               selection: accountSelection,
               modelAuthStatusResult: state.modelAuthStatusResult,
+              agentId: affectedAgentId,
+              canSelectSharedAccounts: () =>
+                state.hello?.auth?.scopes?.includes("operator.admin") === true,
               model: accountModel,
               disabled:
                 !modelAccess.allowed ||

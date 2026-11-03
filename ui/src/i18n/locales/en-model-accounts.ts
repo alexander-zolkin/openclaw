@@ -39,6 +39,8 @@ const enModelAccounts = {
       savedAccounts: "Saved accounts",
       loadMore: "Load more saved accounts",
       inventoryFailed: "Could not load saved accounts. Refresh to retry.",
+      automaticPinned:
+        "This chat has a pinned account. Automatic selection requires resetting its model to the Gateway default.",
       authTypes: {
         oauth: "Browser sign-in · saved account",
         token: "Token · saved account",

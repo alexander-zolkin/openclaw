@@ -9,6 +9,7 @@ import type {
   ControlUiPanel,
   ControlUiReplacement,
   ControlUiSurface,
+  ControlUiUserMessageEffect,
   ControlUiWidget,
 } from "../../../src/plugin-sdk/control-ui.js";
 
@@ -26,6 +27,7 @@ export type ControlUiContributions = {
   panels: ControlUiPanel;
   actions: ControlUiAction;
   accessories: ControlUiAccessory;
+  userMessageEffects: ControlUiUserMessageEffect;
   widgets: ControlUiWidget;
   replacements: ControlUiReplacement;
 };
@@ -47,5 +49,12 @@ export type ControlUiPluginCapability = {
     surface: ControlUiSurface,
   ) => ControlUiRegistration<ControlUiReplacement> | undefined;
   selectReplacement: (surface: ControlUiSurface, key: string | null) => void;
+  /** Capture current message-effect registrations for one newly committed row. */
+  captureUserMessageEffects: (params: {
+    sessionKey: string;
+    agentId: string;
+    messageId: string;
+    composerElement?: HTMLTextAreaElement;
+  }) => ((element: HTMLElement) => boolean) | undefined;
   reportError: (pluginId: string, error: unknown) => void;
 };

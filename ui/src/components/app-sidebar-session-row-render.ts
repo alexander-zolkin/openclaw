@@ -9,6 +9,7 @@ import type { GatewaySessionRow } from "../api/types.ts";
 import type { NavigationRouteId } from "../app-navigation.ts";
 import type { ApplicationContext, ApplicationNavigationOptions } from "../app/context.ts";
 import { resolveControlUiAvatarAuth } from "../app/control-ui-auth.ts";
+import { readPresenceEntries } from "../app/user-profile.ts";
 import { t } from "../i18n/index.ts";
 import { formatDurationCompact } from "../lib/format-duration.ts";
 import { renderHoverMarquee } from "../lib/hover-marquee.ts";
@@ -27,6 +28,11 @@ import type {
   CatalogBackingSessionDisplay,
   CatalogSessionMenuRequest,
 } from "./app-sidebar-session-catalogs.ts";
+import {
+  sidebarSessionDevice,
+  type SidebarSessionActivityFilter,
+  type SidebarSessionDevice,
+} from "./app-sidebar-session-device.ts";
 import type { SessionPullRequestIndicatorsController } from "./app-sidebar-session-pr-indicators.ts";
 import type { SidebarSessionProjection } from "./app-sidebar-session-projection.ts";
 import {
@@ -120,6 +126,11 @@ export interface SessionListHost {
     | "toggleCatalogViewMenu"
     | "togglePositionedMenu"
   >;
+  readonly sessionDeviceFilter: string;
+  readonly sessionActivityFilter: SidebarSessionActivityFilter;
+  sessionDeviceOptions(): SidebarSessionDevice[];
+  setSessionDeviceFilter(value: string): void;
+  setSessionActivityFilter(value: SidebarSessionActivityFilter): void;
   readonly sessionsStatusFilter: SidebarSessionStatusFilter;
   readonly sessionOwnerFilterActive: boolean;
   readonly sessionOwnerFilterId: string | null;
@@ -437,6 +448,19 @@ export function renderRecentSession(params: {
     requiredScope: "operator.write",
   });
   const rowDraggable = !session.isChild && groupWriteAccess.allowed;
+  const device = sidebarSessionDevice(
+    session,
+    readPresenceEntries(host.sessionData.presencePayload),
+  );
+  const deviceBadge =
+    display && !session.execNode && !session.placementDeviceId
+      ? nothing
+      : html`<span
+          class="sidebar-session-device"
+          data-session-device=${device.id}
+          title=${device.title}
+          >${device.label}</span
+        >`;
   const marqueeLabelTemplate = renderHoverMarquee(
     html`${team ? nothing : indicators.originIndicators}${label}`,
     "sidebar-recent-session__name",
@@ -492,7 +516,7 @@ export function renderRecentSession(params: {
       >
         ${persistentIndicator}
         <span class="sidebar-recent-session__text">
-          <span class="sidebar-recent-session__title-row">${marqueeLabel}</span>
+          <span class="sidebar-recent-session__title-row">${marqueeLabel}${deviceBadge}</span>
           <span class="sidebar-recent-session__details">
             ${
               session.channelPresentation

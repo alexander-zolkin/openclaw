@@ -63,7 +63,7 @@ import { TranscriptViewportRect } from "./chat-transcript-viewport-rect.ts";
 
 export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatTranscriptSession {
   private readonly offsetState = new TranscriptOffsetState();
-  readonly entryAnimations = new ChatMessageEntryAnimations();
+  readonly entryAnimations: ChatMessageEntryAnimations;
   expandedAssistantMessages = new Map<string, AssistantMessageExpansionState>();
   private readonly controllers = new Set<ReactiveController>();
   private readonly positionRail: PositionRailGutterController;
@@ -185,7 +185,13 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
     initialOffset: number | null = null,
     onInitialOffsetSettled?: (position: ChatSessionScrollPosition) => void,
     private readonly callbacks: TranscriptCallbacks = {},
+    private readonly sessionKey = "",
   ) {
+    this.entryAnimations = new ChatMessageEntryAnimations(
+      this.callbacks.captureUserMessageEffect
+        ? (messageId) => this.callbacks.captureUserMessageEffect?.(this.sessionKey, messageId)
+        : undefined,
+    );
     this.positionRail = new PositionRailGutterController(this, () => this.threadInnerElement);
     this.viewportRect = new TranscriptViewportRect({
       getScrollElement: () => this.scrollElement,

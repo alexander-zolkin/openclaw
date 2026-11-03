@@ -131,6 +131,8 @@ const enNewSessionSetup = {
       "Clear session capability overrides before starting in a terminal.",
     checkout: "Checkout",
     checkoutCurrent: "Current checkout",
+    checkoutDeviceFolder: "Existing device folder",
+    deviceHome: "Device home",
     checkoutWorktree: "New worktree",
     checkoutWorktreeNamed: "Worktree · {name}",
     checkoutWorktreeSub: "Isolated copy of the repo",

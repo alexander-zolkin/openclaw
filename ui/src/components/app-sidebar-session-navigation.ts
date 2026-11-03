@@ -5,6 +5,7 @@ import type { SessionObserverDigest } from "../../../packages/gateway-protocol/s
 import type { GatewaySessionRow, SessionsListResult } from "../api/types.ts";
 import { serializeSidebarEntry } from "../app-navigation.ts";
 import { isSessionRouteId } from "../app-route-paths.ts";
+import { readPresenceEntries } from "../app/user-profile.ts";
 import { t } from "../i18n/index.ts";
 import { shouldHandleNavigationClick } from "../lib/navigation-click.ts";
 import {
@@ -34,6 +35,11 @@ import {
   adoptedCatalogSessionKeys,
   type SidebarSessionCatalog,
 } from "./app-sidebar-session-catalogs.ts";
+import {
+  filterSidebarSessionRows,
+  sidebarSessionDevice,
+  type SidebarSessionActivityFilter,
+} from "./app-sidebar-session-device.ts";
 import {
   findSidebarHovercardRow,
   mergeAdoptedSessionPullRequestRows,
@@ -168,6 +174,11 @@ export class AppSidebarSessionNavigationElement extends AppSidebarBase {
 
   setSessionSortMode(mode: SidebarSessionSortMode) {
     this.sessionSortMode = storeSidebarSessionSortMode(mode, this.sessionPeopleSortCapability());
+    void this.sessionData.refreshSidebarSessions();
+  }
+
+  sidebarSessionSortMode(): SidebarSessionSortMode {
+    return this.effectiveSessionSortMode();
   }
 
   private readonly sessionOwnerFilter = new SessionOwnerFilterController(this, () => this.context);
@@ -192,6 +203,40 @@ export class AppSidebarSessionNavigationElement extends AppSidebarBase {
   sessionOwnershipVisibility = { filters: false, avatars: false };
 
   @state() selectedSessionKeys: ReadonlySet<string> = new Set();
+  @state() sessionDeviceFilter = "all";
+  @state() sessionActivityFilter: SidebarSessionActivityFilter = "all";
+
+  setSessionDeviceFilter(value: string) {
+    this.sessionProjection.resetMembership();
+    this.sessionData.visibleSessionLimits = new Map();
+    this.sessionDeviceFilter = value;
+  }
+
+  setSessionActivityFilter(value: SidebarSessionActivityFilter) {
+    this.sessionProjection.resetMembership();
+    this.sessionData.visibleSessionLimits = new Map();
+    this.sessionActivityFilter = value;
+  }
+
+  sessionDeviceOptions() {
+    const navigation = this.getSessionNavigationState();
+    const presence = readPresenceEntries(this.sessionData.presencePayload) ?? [];
+    const devices = [
+      sidebarSessionDevice({}, presence),
+      ...presence
+        .filter(
+          (entry) => entry.deviceId && (entry.mode === "node" || entry.roles?.includes("node")),
+        )
+        .map((entry) => sidebarSessionDevice({ execNode: entry.deviceId }, presence)),
+      ...navigation.visibleSessionRows.map((row) =>
+        sidebarSessionDevice(navigation.toSidebarSession(row), presence),
+      ),
+    ];
+    return [...new Map(devices.map((device) => [device.id, device])).values()].toSorted((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }
+
   @state() sessionsGrouping: SidebarSessionsGrouping = loadStoredSidebarSessionsGrouping();
   @state() sessionsShowCron = loadStoredSidebarSessionsShowCron();
   @state() sessionsShowPreview = loadStoredSidebarSessionsShowPreview();
@@ -672,7 +717,12 @@ export class AppSidebarSessionNavigationElement extends AppSidebarBase {
           compareSessions: createSidebarSessionRowsComparator(this.readSidebarSessionSortOptions),
           resolveAttention: this.resolveSessionAttention,
         });
-        return this.applySessionOwnerFilter(projected, this.selectedAgentSessionResult()?.owners);
+        return filterSidebarSessionRows(
+          this.applySessionOwnerFilter(projected, this.selectedAgentSessionResult()?.owners),
+          this.sessionDeviceFilter,
+          this.sessionActivityFilter,
+          readPresenceEntries(this.sessionData.presencePayload) ?? [],
+        );
       },
     );
     this.attention.scheduleSessionSnoozeWake(

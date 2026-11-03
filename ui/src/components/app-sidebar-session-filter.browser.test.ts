@@ -67,6 +67,13 @@ async function mountFilters(width: number, teammates = 0) {
 }
 
 describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popover", () => {
+  it("uses activity and date as fresh-profile defaults without a reset affordance", async () => {
+    const { sidebar } = await mountFilters(1440);
+    expect(loadStoredSidebarSessionSortMode()).toBe("activity");
+    expect(loadStoredSidebarSessionsGrouping()).toBe("date");
+    expect(sidebar.querySelector("#sidebar-sessions-reset")).toBeNull();
+  });
+
   it.each([
     { width: 1440, direction: "ltr" },
     { width: 390, direction: "ltr" },
@@ -167,7 +174,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
         .toHaveFocus();
       await userEvent.tab();
       await expect
-        .element(page.getByRole("button", { name: "Group by: Custom groups", exact: true }))
+        .element(page.getByRole("button", { name: "Group by: Date", exact: true }))
         .toHaveFocus();
       await userEvent.keyboard(direction === "rtl" ? "{ArrowLeft}" : "{ArrowRight}");
       const choices = sidebar.querySelector<HTMLElement>(
@@ -187,15 +194,15 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
         .toBe(true);
       await userEvent.keyboard(direction === "rtl" ? "{ArrowRight}" : "{ArrowLeft}");
       await expect
-        .element(page.getByRole("button", { name: "Group by: Custom groups", exact: true }))
+        .element(page.getByRole("button", { name: "Group by: Date", exact: true }))
         .toHaveFocus();
-      await userEvent.keyboard("{Enter}{ArrowDown}{Enter}");
+      await userEvent.keyboard("{Enter}{ArrowDown}{ArrowDown}{Enter}");
       await expect.poll(loadStoredSidebarSessionsGrouping).toBe("project");
       await userEvent.tab();
       await expect
-        .element(page.getByRole("button", { name: "Sort by: Created", exact: true }))
+        .element(page.getByRole("button", { name: "Sort by: Recent activity", exact: true }))
         .toHaveFocus();
-      await userEvent.keyboard("{Enter}{ArrowDown}{Enter}");
+      await userEvent.keyboard("{Enter}{ArrowDown}{ArrowDown}{Enter}");
       await expect.poll(loadStoredSidebarSessionSortMode).toBe("updated");
       await userEvent.tab();
       await expect
@@ -237,7 +244,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
         setTimeout(resolve, 300);
       });
     await page.getByRole("button", { name: "Filter & sort", exact: true }).click();
-    const sort = page.getByRole("button", { name: "Sort by: Created", exact: true });
+    const sort = page.getByRole("button", { name: "Sort by: Recent activity", exact: true });
     const sortRow = sidebar.querySelector<HTMLElement>("#sidebar-sessions-sort")!.parentElement!;
     sortRow.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "touch" }));
     await settle();
@@ -277,7 +284,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
     await automation.click();
     await expect.element(automation).toHaveAttribute("aria-checked", "true");
     // A choice opens as a page covering the sheet, with Back and a title.
-    await page.getByRole("button", { name: "Group by: Custom groups", exact: true }).click();
+    await page.getByRole("button", { name: "Group by: Date", exact: true }).click();
     const choices = sidebar.querySelector<HTMLElement>('[role="listbox"][aria-label="Group by"]')!;
     await expect.element(choices).toBeVisible();
     const choicePage = choices.closest<HTMLElement>(".picker-select__menu")!;
@@ -289,7 +296,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
     await expect.element(back).toHaveFocus();
     await back.click();
     await expect.element(choices).not.toBeInTheDocument();
-    await page.getByRole("button", { name: "Group by: Custom groups", exact: true }).click();
+    await page.getByRole("button", { name: "Group by: Date", exact: true }).click();
     await page.getByRole("option", { name: "Project", exact: true }).click();
     expect(loadStoredSidebarSessionsGrouping()).toBe("project");
     await expect
@@ -350,15 +357,15 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
       const { sidebar, page } = await mountFilters(width);
       await page.getByRole("button", { name: "Filter & sort", exact: true }).click();
       const menu = sidebar.querySelector(".sidebar-session-sort-menu");
-      for (const [label, choice, defaultValue] of [
-        ["Group by", "Person", "Custom groups"],
-        ["Sort by", "Last updated", "Created"],
-        ["Hide empty groups", "Always", "When filtering"],
-        ["Show message preview", null, null],
+      for (const [label, choice, initialValue, resetValue] of [
+        ["Group by", "Person", "Date", "Date"],
+        ["Sort by", "Last updated", "Recent activity", "Recent activity"],
+        ["Hide empty groups", "Always", "When filtering", "When filtering"],
+        ["Show message preview", null, null, null],
       ] as const) {
         if (choice) {
           await page
-            .getByRole("button", { name: label + ": " + defaultValue, exact: true })
+            .getByRole("button", { name: label + ": " + initialValue, exact: true })
             .click();
           await page.getByRole("option", { name: choice, exact: true }).click();
         } else {
@@ -370,12 +377,12 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
         expect(trigger.hasAttribute("aria-description")).toBe(false);
         expect(sidebar.querySelector("#sidebar-sessions-reset"), label).not.toBeNull();
         await page.getByRole("button", { name: "Reset", exact: true }).click();
-        expect(loadStoredSidebarSessionsGrouping()).toBe("category");
-        expect(loadStoredSidebarSessionSortMode()).toBe("created");
+        expect(loadStoredSidebarSessionsGrouping()).toBe("date");
+        expect(loadStoredSidebarSessionSortMode()).toBe("activity");
         expect(loadStoredSidebarSessionsShowPreview()).toBe(false);
         if (choice) {
           await expect
-            .element(page.getByRole("button", { name: label + ": " + defaultValue, exact: true }))
+            .element(page.getByRole("button", { name: label + ": " + resetValue, exact: true }))
             .toBeVisible();
         } else {
           await expect
@@ -410,7 +417,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
         expect(sidebar.querySelector("#sidebar-sessions-empty")).toBeNull();
       } else {
         await page.getByRole("button", { name: "Filter & sort", exact: true }).click();
-        await page.getByRole("button", { name: "Group by: Custom groups", exact: true }).click();
+        await page.getByRole("button", { name: "Group by: Date", exact: true }).click();
         await page.getByRole("option", { name: "Person", exact: true }).click();
         sessions.publish({ result: { ...original, owners: original.owners!.slice(0, 1) } });
         await expect
@@ -461,7 +468,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
       expect(sidebar.querySelector("#sidebar-sessions-reset") !== null).toBe(resetVisible);
     };
     await expectFilterCount(0);
-    await page.getByRole("button", { name: "Group by: Custom groups", exact: true }).click();
+    await page.getByRole("button", { name: "Group by: Date", exact: true }).click();
     await page.getByRole("option", { name: "Person", exact: true }).click();
     expect(loadStoredSidebarSessionsGrouping()).toBe("person");
     await expectFilterCount(0, true);
@@ -523,8 +530,8 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
     expect(sidebar.sessionOwnerFilterId).toBeNull();
     expect(loadStoredSidebarSessionsShowCron()).toBe(false);
     expect(loadStoredSidebarSessionsShowSystem()).toBe(false);
-    expect(loadStoredSidebarSessionsGrouping()).toBe("category");
-    expect(loadStoredSidebarSessionSortMode()).toBe("created");
+    expect(loadStoredSidebarSessionsGrouping()).toBe("date");
+    expect(loadStoredSidebarSessionSortMode()).toBe("activity");
     expect(loadStoredSidebarSessionsShowPreview()).toBe(false);
     await expect
       .element(page.getByRole("button", { name: "Hide empty groups: When filtering", exact: true }))
@@ -537,6 +544,8 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     expect(loadStoredSidebarSessionsShowCron()).toBe(false);
     await expectFilterCount(0);
+    await page.getByRole("button", { name: "Group by: Date", exact: true }).click();
+    await page.getByRole("option", { name: "Custom groups", exact: true }).click();
     await page.getByRole("button", { name: /^Hide empty groups:/ }).click();
     await page.getByRole("option", { name: "Always", exact: true }).click();
     expect(sidebar.querySelector('[data-session-section="category:Empty"]')).toBeNull();

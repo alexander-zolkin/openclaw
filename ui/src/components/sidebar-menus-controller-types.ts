@@ -8,6 +8,10 @@ import type { CatalogProjectGrouping } from "../lib/sessions/catalog-project-gro
 import type { SidebarSessionsGrouping } from "../lib/sessions/grouping.ts";
 import type { ControlUiRegistration } from "../plugins/control-ui-capability.ts";
 import type {
+  SidebarSessionActivityFilter,
+  SidebarSessionDevice,
+} from "./app-sidebar-session-device.ts";
+import type {
   SidebarEmptyGroupsMode,
   SidebarRecentSession,
   SidebarSessionSortMode,
@@ -70,6 +74,11 @@ export interface SidebarMenusControllerHost extends SessionOrganizerControllerHo
   effectiveSessionSortMode(): SidebarSessionSortMode;
   effectiveSessionsGrouping(): SidebarSessionsGrouping;
   sessionPeopleSortAvailable(): boolean;
+  readonly sessionDeviceFilter: string;
+  readonly sessionActivityFilter: SidebarSessionActivityFilter;
+  sessionDeviceOptions(): SidebarSessionDevice[];
+  setSessionDeviceFilter(value: string): void;
+  setSessionActivityFilter(value: SidebarSessionActivityFilter): void;
   setSessionSortMode(mode: SidebarSessionSortMode): void;
   setSessionOwnerFilter(ownerId: string | null, involvingMe?: boolean): void;
   readonly terminalAvailable: boolean;

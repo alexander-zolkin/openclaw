@@ -1,6 +1,7 @@
 import { html, nothing } from "lit";
 import { readPresenceEntries, resolveCurrentSelfUser } from "../app/user-profile.ts";
 import { t } from "../i18n/index.ts";
+import { SIDEBAR_SESSION_ACTIVITY_OPTIONS } from "./app-sidebar-session-device.ts";
 import type { SessionListHost } from "./app-sidebar-session-row-render.ts";
 import { icons } from "./icons.ts";
 import { renderNewSessionLink } from "./new-session-link.ts";
@@ -28,6 +29,21 @@ function renderSessionFilterSummary(host: SessionListHost) {
   const parts = [
     ...(ownerId ? [owner?.label ?? ownerId] : []),
     ...(host.sessionInvolvingMeFilterActive ? [t("sessionsView.involvingMe")] : []),
+    ...(host.sessionDeviceFilter !== "all"
+      ? [
+          host.sessionDeviceOptions().find((device) => device.id === host.sessionDeviceFilter)
+            ?.label ?? t("chat.sidebar.device"),
+        ]
+      : []),
+    ...(host.sessionActivityFilter !== "all"
+      ? [
+          t(
+            SIDEBAR_SESSION_ACTIVITY_OPTIONS.find(
+              (option) => option.value === host.sessionActivityFilter,
+            )!.labelKey,
+          ),
+        ]
+      : []),
     ...(host.sessionsStatusFilter === "snoozed"
       ? [t("sessionsView.snoozed")]
       : host.sessionsStatusFilter === "archived"
@@ -45,6 +61,8 @@ function renderSessionFilterSummary(host: SessionListHost) {
     aria-label=${`${summaryText} · ${showAll}`}
     @click=${() => {
       host.setSessionOwnerFilter(null);
+      host.setSessionDeviceFilter("all");
+      host.setSessionActivityFilter("all");
       if (host.sessionsStatusFilter !== "active") {
         host.sessionOrganizer.setSessionsStatusFilter("active");
       }
@@ -72,13 +90,16 @@ function renderSessionFilterSummary(host: SessionListHost) {
 type SessionFilterHost = Pick<
   SessionListHost,
   "sessionOwnerFilterActive" | "sessionInvolvingMeFilterActive" | "sessionsStatusFilter"
->;
+> &
+  Partial<Pick<SessionListHost, "sessionDeviceFilter" | "sessionActivityFilter">>;
 
 /** Only Owners and Status filter sessions; the other panel rows are display choices. */
 export function countSidebarSessionFilters(host: SessionFilterHost) {
   return (
     Number(host.sessionOwnerFilterActive || host.sessionInvolvingMeFilterActive) +
-    Number(host.sessionsStatusFilter !== "active")
+    Number(host.sessionsStatusFilter !== "active") +
+    Number(host.sessionDeviceFilter !== undefined && host.sessionDeviceFilter !== "all") +
+    Number(host.sessionActivityFilter !== undefined && host.sessionActivityFilter !== "all")
   );
 }
 
@@ -110,7 +131,9 @@ export function renderSessionListToolbar(host: SessionListHost) {
   const filtered =
     host.sessionOwnerFilterActive ||
     host.sessionInvolvingMeFilterActive ||
-    host.sessionsStatusFilter !== "active";
+    host.sessionsStatusFilter !== "active" ||
+    host.sessionDeviceFilter !== "all" ||
+    host.sessionActivityFilter !== "all";
   return html`
     <div class="sidebar-session-toolbar">
       <span class="sidebar-recent-sessions__label-text">${t("chat.sidebar.threads")}</span>

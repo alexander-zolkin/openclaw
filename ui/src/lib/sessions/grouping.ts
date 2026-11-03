@@ -1,5 +1,6 @@
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { normalizeUniqueTrimmedStringList } from "@openclaw/normalization-core/string-normalization";
+import { sessionActivityTimestamp } from "../../../../src/shared/session-activity-timestamp.ts";
 import type { GatewaySessionRow } from "../../api/types.ts";
 import { moveArrayEntry } from "../array-order.ts";
 import { pathDisplayName } from "../path-display.ts";
@@ -24,6 +25,7 @@ export type SessionsGroupBy = (typeof SESSION_GROUP_MODES)[number];
 export const UNGROUPED_ID = "";
 
 const DATE_BUCKET_ORDER = ["today", "yesterday", "week", "older", UNGROUPED_ID] as const;
+const SIDEBAR_DATE_BUCKET_ORDER = ["today", "yesterday", "week", "month", "older"] as const;
 
 export type SessionRowGroup = {
   id: string;
@@ -40,7 +42,9 @@ export type SidebarSessionSection<Row> = {
     | `category:${string}`
     | `person:${string}`
     | `project:${string}`
-    | `catalog:${string}`;
+    | `catalog:${string}`
+    | `date:${string}`;
+  dateBucket?: string;
   category?: string;
   personOwner?: NonNullable<GatewaySessionRow["owner"]>["actor"] & { id: string };
   /** Repo/workspace section (project grouping); `path` disambiguates same-named repos. */
@@ -122,7 +126,11 @@ export function normalizeSessionsGroupBy(raw: unknown): SessionsGroupBy {
   return SESSION_GROUP_MODES.includes(raw as SessionsGroupBy) ? (raw as SessionsGroupBy) : "none";
 }
 
-function createDateGroupResolver(now: number): (row: GatewaySessionRow) => string {
+function createDateGroupResolver<Row>(
+  now: number,
+  timestampFor: (row: Row) => number,
+  includeMonth = false,
+): (row: Row) => string {
   const today = new Date(now);
   // Calendar midnights can be 23 or 25 hours apart across daylight-saving changes.
   const startOfDay = (daysAgo: number) =>
@@ -130,17 +138,21 @@ function createDateGroupResolver(now: number): (row: GatewaySessionRow) => strin
   const startOfToday = startOfDay(0);
   const startOfYesterday = startOfDay(1);
   const startOfWeek = startOfDay(6);
-  return ({ updatedAt }) => {
-    if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+  return (row) => {
+    const timestamp = timestampFor(row);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
       return UNGROUPED_ID;
     }
-    if (updatedAt >= startOfToday) {
+    if (timestamp >= startOfToday) {
       return "today";
     }
-    if (updatedAt >= startOfYesterday) {
+    if (timestamp >= startOfYesterday) {
       return "yesterday";
     }
-    return updatedAt >= startOfWeek ? "week" : "older";
+    if (timestamp >= startOfWeek) {
+      return "week";
+    }
+    return includeMonth && timestamp >= now - 31 * 24 * 60 * 60 * 1000 ? "month" : "older";
   };
 }
 
@@ -177,7 +189,9 @@ export function groupSessionRows(params: {
   const now = params.now ?? Date.now();
   const groupId =
     params.mode === "date"
-      ? createDateGroupResolver(now)
+      ? createDateGroupResolver(now, (row: GatewaySessionRow) =>
+          typeof row.updatedAt === "number" ? row.updatedAt : 0,
+        )
       : (row: GatewaySessionRow) => resolveSessionGroupId(row, params.mode);
   const byId = new Map<string, GatewaySessionRow[]>();
   for (const row of params.rows) {
@@ -191,10 +205,16 @@ export function groupSessionRows(params: {
 }
 
 /** How the sidebar buckets non-pinned rows before its built-in smart zones. */
-export type SidebarSessionsGrouping = "category" | "person" | "project" | "none";
+export type SidebarSessionsGrouping = "category" | "person" | "project" | "date" | "none";
 
 export function normalizeSidebarSessionsGrouping(raw: unknown): SidebarSessionsGrouping {
-  return raw === "none" || raw === "person" || raw === "project" ? raw : "category";
+  return raw === "none" ||
+    raw === "person" ||
+    raw === "project" ||
+    raw === "category" ||
+    raw === "date"
+    ? raw
+    : "date";
 }
 
 type SidebarGroupableRow = {
@@ -209,6 +229,10 @@ type SidebarGroupableRow = {
   workSession?: boolean;
   /** ACP-backed harness session (Coding zone). */
   acpSession?: boolean;
+  lastActivityAt?: number;
+  lastInteractionAt?: number;
+  updatedAt?: number | null;
+  createdAt?: number;
 };
 
 /** Clearing the manual category reveals the built-in Groups destination. */
@@ -246,6 +270,7 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
     selfOwnerId?: string | null;
     sectionOrder?: readonly string[];
     catalogIds?: readonly string[];
+    now?: number;
   } = {},
 ): SidebarSessionSection<Row>[] {
   const grouping = options.grouping ?? "category";
@@ -253,6 +278,9 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
   const threads: Row[] = [];
   const groups: Row[] = [];
   const coding: Row[] = [];
+  const dateBuckets = new Map<string, Row[]>();
+  const now = options.now ?? Date.now();
+  const resolveDateBucket = createDateGroupResolver(now, sessionActivityTimestamp, true);
   const grouped = new Map<string, SidebarSessionSection<Row>>();
   const knownGroups =
     grouping === "category" ? normalizeUniqueTrimmedStringList(options.knownGroups) : [];
@@ -262,6 +290,13 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
   for (const row of rows) {
     if (row.pinned === true) {
       pinned.push(row);
+      continue;
+    }
+    if (grouping === "date") {
+      const bucket = resolveDateBucket(row);
+      const bucketRows = dateBuckets.get(bucket) ?? [];
+      bucketRows.push(row);
+      dateBuckets.set(bucket, bucketRows);
       continue;
     }
     if (grouping === "none") {
@@ -300,6 +335,14 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
         ]
       : [];
   const orderedSections = orderedCategories.map((category) => grouped.get(`category:${category}`)!);
+  if (grouping === "date") {
+    for (const id of [...SIDEBAR_DATE_BUCKET_ORDER, UNGROUPED_ID]) {
+      const bucketRows = dateBuckets.get(id);
+      if (bucketRows?.length) {
+        orderedSections.push({ id: `date:${id}`, dateBucket: id, rows: bucketRows });
+      }
+    }
+  }
   if (grouping !== "category") {
     // Derived groups sort ahead of persisted zones; each group's first row owns its metadata.
     sections.push(
@@ -308,7 +351,7 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
       ),
     );
   }
-  orderedSections.push({ id: "ungrouped", rows: threads });
+  if (grouping !== "date") orderedSections.push({ id: "ungrouped", rows: threads });
   const hasGroupsReturnTarget = rows.some((row) => categoryClearReturnsToGroups(row, grouping));
   if (groups.length > 0 || hasGroupsReturnTarget) {
     orderedSections.push({ id: "groups", groups: true, rows: groups });
@@ -323,6 +366,8 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
   );
   if (options.sectionOrder) {
     const sectionsById = new Map(orderedSections.map((section) => [section.id, section]));
+    const dateSections = orderedSections.filter((section) => section.dateBucket !== undefined);
+    for (const section of dateSections) sectionsById.delete(section.id);
     for (const sectionId of normalizeSessionSectionOrder(
       options.sectionOrder,
       orderedCategories,
@@ -334,7 +379,11 @@ export function groupSidebarSessionRows<Row extends SidebarGroupableRow>(
         sectionsById.delete(section.id);
       }
     }
-    sections.push(...orderedSections.filter((section) => sectionsById.has(section.id)));
+    sections.push(
+      ...orderedSections.filter((section) => sectionsById.has(section.id) && !section.dateBucket),
+    );
+    const workIndex = sections.findIndex((section) => section.id === "work");
+    sections.splice(workIndex < 0 ? sections.length : workIndex, 0, ...dateSections);
     return sections;
   }
   sections.push(...orderedSections);

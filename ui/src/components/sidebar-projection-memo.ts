@@ -10,6 +10,7 @@ import {
   type SidebarHomeSession,
 } from "./app-sidebar-agent-session-rows.ts";
 import type { SidebarSessionCatalog } from "./app-sidebar-session-catalogs.ts";
+import type { SidebarSessionActivityFilter } from "./app-sidebar-session-device.ts";
 import { findActiveSidebarLineageRow } from "./app-sidebar-session-lookup.ts";
 import {
   buildSidebarSessionNavigationState,
@@ -40,6 +41,8 @@ export type SidebarProjectionHost = {
   } | null;
   readonly activeRouteId?: RouteId;
   readonly sessionSortMode: SidebarSessionSortMode;
+  readonly sessionDeviceFilter: string;
+  readonly sessionActivityFilter: SidebarSessionActivityFilter;
   readonly sessionsStatusFilter: SidebarSessionStatusFilter;
   readonly sessionsEmptyGroupsMode: SidebarEmptyGroupsMode;
   readonly sessionsShowCron: boolean;
@@ -116,6 +119,7 @@ export function sidebarNavigationInputs(
     host.sessionProjection.createdOrderRevision,
     host.sessionsShowCron,
     host.sessionsShowSystem,
+    host.sessionActivityFilter,
     host.sessionsStatusFilter,
     host.resolveSessionAttention,
     host.storedOutboxes,
@@ -207,7 +211,7 @@ export function projectSidebarNavigation(
     activeSession: findActiveSidebarLineageRow(host.sessionData, routeSessionKey),
     sessionsAgentId: host.sessionData.sessionsAgentId,
     showCron: host.sessionsShowCron,
-    showSystem: host.sessionsShowSystem,
+    showSystem: host.sessionsShowSystem || host.sessionActivityFilter === "system",
     statusFilter: host.sessionsStatusFilter,
     compareSessions,
     highlightCurrentSession: isSessionRouteId(host.activeRouteId),
@@ -271,6 +275,9 @@ export function sidebarRowsInputs(
     host.hiddenSessionCatalogIds,
     host.sessionOwnerFilterId,
     host.sessionInvolvingMeFilterActive,
+    host.sessionDeviceFilter,
+    host.sessionActivityFilter,
+    host.sessionData.presencePayload,
     host.sessionDataContext?.gateway.snapshot.selfUser,
   ];
 }

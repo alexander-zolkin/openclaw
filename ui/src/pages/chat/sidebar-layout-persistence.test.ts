@@ -17,6 +17,23 @@ import {
 } from "./sidebar-layout.ts";
 
 describe("sidebar session layout settings", () => {
+  it("does not replay a consumed fraction after saving measured geometry", () => {
+    const layout = openSlot({ columns: [] }, "terminal", {
+      dock: "bottom",
+      promote: true,
+      sideFraction: 0.5,
+    });
+    const stored = updateSidebarSessionLayout({}, "agent:main:task", layout);
+    const measured = resizeSidebarPanel(layout, layout.columns[0]!.id, 400);
+    const next = updateSidebarSessionLayout(stored, "agent:main:task", measured, {
+      geometryOnly: true,
+    });
+    const restored = normalizeSidebarSessionLayouts(next)["agent:main:task"]!;
+    expect(restored.columns[0]!.height).toBe(400);
+    expect(restored.columns[0]!.sideFractionPending).toBeUndefined();
+    expect(restored.mainPanelId).toBe(layout.mainPanelId);
+    expect(restored.columns[0]!.panels).toEqual(layout.columns[0]!.panels);
+  });
   it("drops retired task panels and selections while preserving other panels", () => {
     const saved = normalizeSidebarSessionLayouts({
       main: {

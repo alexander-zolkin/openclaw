@@ -32,6 +32,8 @@ export type PluginPanelToggleDetail = {
   agentId?: string;
   open: boolean;
   dock?: "bottom" | "right";
+  promote?: true;
+  sideFraction?: number;
 };
 
 export const UI_COMMAND_EVENT = "openclaw:ui-command";
@@ -41,6 +43,8 @@ export type UiCommandDetail = UiCommandParams;
 export type TerminalPanelToggleDetail = {
   agentId?: string | null;
   dock?: "bottom" | "right";
+  promote?: true;
+  sideFraction?: number;
   newSession?: boolean;
   open?: boolean;
   terminalSessionId?: string;
@@ -49,6 +53,8 @@ export type TerminalPanelToggleDetail = {
 
 export type BrowserPanelToggleDetail = {
   dock?: "bottom" | "right";
+  promote?: true;
+  sideFraction?: number;
   newTab?: boolean;
   open?: boolean;
   /** Existing tab to focus when the panel opens (browser-tab chat cards). */
@@ -60,12 +66,16 @@ export type BrowserPanelToggleDetail = {
 
 export type DesktopPanelToggleDetail = {
   dock?: "bottom" | "right";
+  promote?: true;
+  sideFraction?: number;
   open?: boolean;
   environmentId?: string;
 };
 
 export type PortalPanelToggleDetail = {
   dock?: "bottom" | "right";
+  promote?: true;
+  sideFraction?: number;
   open?: boolean;
   portalId?: string;
   environmentId?: string;

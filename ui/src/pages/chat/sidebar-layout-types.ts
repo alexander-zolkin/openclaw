@@ -29,6 +29,8 @@ export type SidebarColumn = {
   width: number;
   /** New columns choose their browser width once the pane can be measured. */
   browserWidthPending?: true;
+  /** One explicit layout command, consumed after the real split can be measured. */
+  sideFractionPending?: number;
 };
 export type SidebarLayout = {
   columns: SidebarColumn[];

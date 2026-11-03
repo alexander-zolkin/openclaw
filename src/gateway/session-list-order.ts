@@ -13,8 +13,9 @@ export function compareSessionEntryPairs(
   a: SessionEntryPair,
   b: SessionEntryPair,
   sortBy: SessionsListParams["sortBy"] = "updatedAt",
+  pinnedFirst = false,
 ): number {
-  if (sortBy === "updatedAt") {
+  if (sortBy === "updatedAt" || pinnedFirst) {
     const aPinnedAt =
       a[1]?.pinnedAt !== undefined && isPinnableSessionEntry(a[0], a[1]) ? (a[1].pinnedAt ?? 0) : 0;
     const bPinnedAt =
@@ -38,11 +39,12 @@ export function* sortAndLimitSessionEntries(
   limit: number | undefined,
   sortBy: SessionsListParams["sortBy"],
   shouldYield?: () => boolean,
+  pinnedFirst = false,
 ): SynchronousWork<SessionEntryPair[]> {
   return yield* sortAndLimitByWork(
     entries,
     limit,
-    (a, b) => compareSessionEntryPairs(a, b, sortBy),
+    (a, b) => compareSessionEntryPairs(a, b, sortBy, pinnedFirst),
     shouldYield,
   );
 }

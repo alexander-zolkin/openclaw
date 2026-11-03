@@ -8,8 +8,68 @@ import {
   sessionsResult,
 } from "./session-capability.test-support.ts";
 import type { SessionListOptions, SessionListSnapshot } from "./session-capability.ts";
+import { buildSessionListParams } from "./session-requests.ts";
+
+describe("sidebar activity list request", () => {
+  it("keeps activity ordering in the Gateway query before its bounded page", () => {
+    expect(
+      buildSessionListParams({
+        source: "sidebar",
+        sortBy: "activity",
+        pinnedFirst: true,
+        limit: 30,
+        offset: 30,
+      }),
+    ).toMatchObject({
+      source: "sidebar",
+      sortBy: "activity",
+      pinnedFirst: true,
+      limit: 30,
+      offset: 30,
+    });
+  });
+});
 
 describe("session list replacement options", () => {
+  it("keeps the sidebar activity window separate from the primary roster", async () => {
+    const recent: GatewaySessionRow = { key: "agent:main:recent", kind: "direct", updatedAt: 300 };
+    const oldPin: GatewaySessionRow = {
+      key: "agent:main:old-pin",
+      kind: "direct",
+      updatedAt: 1,
+      pinned: true,
+    };
+    const request = vi.fn(async (_method: string, params?: unknown) =>
+      sessionsResult(asOptionalRecord(params)?.pinnedFirst === true ? [oldPin] : [recent], 1),
+    );
+    const { gateway } = createGatewayHarness(createTestGatewayClient(request));
+    const sessions = createTestSessionCapability(gateway);
+    const query: SessionListOptions = {
+      agentId: "main",
+      source: "sidebar",
+      sortBy: "activity",
+      pinnedFirst: true,
+      limit: 1,
+    };
+    const updates = vi.fn<(snapshot: SessionListSnapshot) => void>();
+    const stop = sessions.subscribeList(query, updates);
+    try {
+      await sessions.refresh({ agentId: "main", force: true });
+      const primary = sessions.state.result;
+      const revision = sessions.canonicalListRevision;
+      await sessions.refreshList({ ...query, force: true });
+      expect(request).toHaveBeenLastCalledWith("sessions.list", expect.objectContaining(query));
+      expect(updates.mock.lastCall?.[0].result?.sessions).toEqual([oldPin]);
+      expect(sessions.listSnapshot(query).result?.sessions).toEqual([oldPin]);
+      expect(sessions.state.result).toBe(primary);
+      expect(sessions.state.result?.sessions).toEqual([recent]);
+      expect(sessions.canonicalListRevision).toBe(revision);
+    } finally {
+      stop();
+      sessions.dispose();
+    }
+  });
+
   it("keeps deliberate dock-inclusive queries separate from the ordinary roster", async () => {
     const ordinary: GatewaySessionRow = { key: "agent:main:ordinary", kind: "direct" };
     const dock: GatewaySessionRow = { key: "agent:main:board-agent", kind: "direct", isDock: true };

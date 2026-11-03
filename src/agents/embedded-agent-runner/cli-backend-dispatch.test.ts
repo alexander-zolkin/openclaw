@@ -228,6 +228,25 @@ describe("runEmbeddedAgentViaCliBackendIfEligible gate", () => {
     expect(runCliAgent.mock.calls[0]?.[0]).toMatchObject({ provider: "claude-cli" });
   });
 
+  it("keeps canonical bootstrap separate from selected project cwd", async () => {
+    const projectDir = "/synthetic/project";
+    const canonicalWorkspace = "/synthetic/agent-workspace";
+    await runEmbeddedAgentViaCliBackendIfEligible(
+      baseRunParams({
+        agentId: "main",
+        config: { agents: { entries: { main: { workspace: canonicalWorkspace } } } },
+        workspaceDir: projectDir,
+        cwd: projectDir,
+      }),
+    );
+
+    expect(runCliAgent.mock.calls[0]?.[0]).toMatchObject({
+      workspaceDir: projectDir,
+      bootstrapWorkspaceDir: canonicalWorkspace,
+      cwd: projectDir,
+    });
+  });
+
   it("dispatches when no credential mode resolves for the passthrough", async () => {
     resolveModelAuthMode.mockReturnValue(undefined);
     expect(await runGate()).toBeDefined();

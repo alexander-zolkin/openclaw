@@ -13,6 +13,7 @@ import {
 } from "../lib/sessions/session-key.ts";
 import { projectSidebarArchiveVisibility } from "./app-sidebar-session-archive-visibility.ts";
 import { adoptedCatalogSessionKeys } from "./app-sidebar-session-catalogs.ts";
+import type { SidebarSessionActivityFilter } from "./app-sidebar-session-device.ts";
 import {
   collectCategorizedChildRootRows,
   collectSidebarSessionRowsByKey,
@@ -42,6 +43,7 @@ type AgentSessionRowsHost = {
   selectedAgentMainSessionKey(agentId: string): string;
   readonly sessionsShowCron: boolean;
   readonly sessionsShowSystem: boolean;
+  readonly sessionActivityFilter?: SidebarSessionActivityFilter;
   readonly sessionsStatusFilter: SidebarSessionStatusFilter;
   readonly sessionInvolvingMeFilterActive: boolean;
 };
@@ -89,7 +91,7 @@ export function projectSidebarAgentSessionRows({
     defaultAgentId,
     filterByAgent: !grouped,
     showCron: host.sessionsShowCron,
-    showSystem: host.sessionsShowSystem,
+    showSystem: host.sessionsShowSystem || host.sessionActivityFilter === "system",
     archivedFilter: host.sessionsStatusFilter,
   } as const;
   const visibility = projectSidebarArchiveVisibility({
@@ -241,7 +243,7 @@ export function projectSidebarAgentSessionRows({
     mainSessionKeys,
     scopedRootKeys,
     showCron: host.sessionsShowCron,
-    showSystem: host.sessionsShowSystem,
+    showSystem: host.sessionsShowSystem || host.sessionActivityFilter === "system",
   });
   for (const row of promotedRows) {
     if (!scopedRootKeys.has(row.key)) {

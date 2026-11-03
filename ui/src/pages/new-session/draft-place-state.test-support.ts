@@ -20,9 +20,9 @@ export function createRepositoryFixture(
   const requestUpdate = vi.fn();
   const persistPreference = vi.fn();
   const readPreference = vi.fn<() => NewSessionPreference>(() => ({ worktree: true }));
-  const request = vi.fn<(method: string) => Promise<unknown>>(async (method) =>
+  const request = vi.fn<(method: string, params?: unknown) => Promise<unknown>>(async (method) =>
     method === "fs.listDir"
-      ? { path: "/plain", entries: [] }
+      ? { path: "/plain", home: "/plain", entries: [] }
       : { repositoryStatus: options.unavailable ? "unavailable" : "not_git", branches: [] },
   );
   const context = {
@@ -33,8 +33,8 @@ export function createRepositoryFixture(
       snapshot: {
         phase: "connected",
         client: {
-          request: async (method: string) =>
-            method === "models.list" ? { models: options.models ?? [] } : request(method),
+          request: async (method: string, params?: unknown) =>
+            method === "models.list" ? { models: options.models ?? [] } : request(method, params),
         },
         hello: { auth: { role: "operator", scopes: ["operator.admin"] } },
       },
@@ -60,6 +60,7 @@ export function createRepositoryFixture(
         type: "node",
         status: "available",
         sessionHost: true,
+        invocableCommands: ["system.run"],
         workerSlots: { total: 1, available: 1 },
       },
     ],
@@ -69,7 +70,7 @@ export function createRepositoryFixture(
   const browser = new DraftPlaceBrowser(
     new TestReactiveControllerHost(),
     gateway,
-    () => ({ context, isAdmin: true }),
+    () => ({ context, isAdmin: true, nodeId: state?.directDevice ? state.deviceId : undefined }),
     {
       requestUpdate,
       onProjectMissing: vi.fn(),
@@ -86,5 +87,14 @@ export function createRepositoryFixture(
     () => ({ context, data: options.data, submitting: false, pendingPlacementSessionKey: "" }),
     { requestUpdate, onError: vi.fn(), onClearError: vi.fn() },
   );
-  return { state, browser, context, persistPreference, readPreference, request, requestUpdate };
+  return {
+    state,
+    browser,
+    context,
+    gateway,
+    persistPreference,
+    readPreference,
+    request,
+    requestUpdate,
+  };
 }

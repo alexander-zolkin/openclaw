@@ -15,9 +15,46 @@ import { withTempHome } from "../plugin-sdk/test-env.js";
 import * as externalContent from "../security/external-content.js";
 import {
   importSessionCatalogHistory,
+  latestSessionCatalogActivityTimestamp,
   preserveSessionCatalogHistory,
   readBoundedSessionCatalogHistory,
 } from "./session-catalog-history-import.js";
+
+describe("latestSessionCatalogActivityTimestamp", () => {
+  it("uses the latest meaningful user or assistant timestamp, not tools or reasoning", () => {
+    const now = Date.parse("2026-11-03T12:00:00.000Z");
+    expect(
+      latestSessionCatalogActivityTimestamp(
+        [
+          { type: "userMessage", text: "Earlier user", timestamp: "2025-01-01T00:00:00Z" },
+          { type: "toolResult", text: "Later tool", timestamp: "2026-01-01T00:00:00Z" },
+          { type: "reasoning", text: "Latest thought", timestamp: "2026-10-01T00:00:00Z" },
+          { type: "agentMessage", text: "Later answer", timestamp: "2025-06-01T00:00:00Z" },
+          { type: "agentMessage", text: "   ", timestamp: "2026-10-02T00:00:00Z" },
+        ],
+        now,
+      ),
+    ).toBe(Date.parse("2025-06-01T00:00:00Z"));
+  });
+
+  it("ignores missing timestamps and quiet assistant tokens, and clamps future dates", () => {
+    const now = Date.parse("2026-11-03T12:00:00.000Z");
+    expect(
+      latestSessionCatalogActivityTimestamp(
+        [
+          { type: "userMessage", text: "Missing time" },
+          { type: "agentMessage", text: "NO_REPLY", timestamp: "2026-01-01T00:00:00Z" },
+          { type: "agentMessage", text: "HEARTBEAT_OK", timestamp: "2026-02-01T00:00:00Z" },
+          { type: "agentMessage", text: "Future reply", timestamp: "2035-01-01T00:00:00Z" },
+        ],
+        now,
+      ),
+    ).toBe(now);
+    expect(
+      latestSessionCatalogActivityTimestamp([{ type: "agentMessage", text: "NO_REPLY" }], now),
+    ).toBeUndefined();
+  });
+});
 
 describe("session catalog history import store selection", () => {
   it("imports and deduplicates in the supplied config store without polluting runtime or default stores", async () => {

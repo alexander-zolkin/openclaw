@@ -5,6 +5,7 @@ import type {
   SessionsCatalogReadResult,
 } from "../../packages/gateway-protocol/src/schema/sessions-catalog.js";
 import { makeZeroUsageSnapshot } from "../agents/usage.js";
+import { HEARTBEAT_TOKEN, isSilentReplyPayloadText } from "../auto-reply/tokens.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { AgentMessage } from "../plugin-sdk/agent-core.js";
 import { withSessionTranscriptWrite } from "../plugin-sdk/session-transcript-runtime.js";
@@ -15,6 +16,32 @@ export const SESSION_CATALOG_TRANSCRIPT_IMPORT_LIMITS = {
   maxItems: 50_000,
   maxBytes: 64 * 1024 * 1024,
 } as const;
+
+/** Latest meaningful source user/assistant timestamp, clamped to the import clock. */
+export function latestSessionCatalogActivityTimestamp(
+  items: readonly SessionCatalogTranscriptItem[],
+  now = Date.now(),
+): number | undefined {
+  let latest = 0;
+  for (const item of items) {
+    if (item.type !== "userMessage" && item.type !== "agentMessage") {
+      continue;
+    }
+    const text = item.text?.trim();
+    if (
+      !text ||
+      (item.type === "agentMessage" &&
+        (isSilentReplyPayloadText(text) || isSilentReplyPayloadText(text, HEARTBEAT_TOKEN)))
+    ) {
+      continue;
+    }
+    const timestamp = parseDateStringTimestampMs(item.timestamp);
+    if (timestamp !== undefined && timestamp > 0) {
+      latest = Math.max(latest, Math.min(timestamp, now));
+    }
+  }
+  return latest > 0 ? latest : undefined;
+}
 
 type SessionCatalogHistory = {
   /** Retained source items in oldest-first order. */

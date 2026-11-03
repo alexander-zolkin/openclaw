@@ -10,6 +10,7 @@ import type { CatalogProjectGrouping } from "../lib/sessions/catalog-project-gro
 import type { SidebarSessionsGrouping } from "../lib/sessions/grouping.ts";
 import { SETTINGS_ROUTE_TARGETS } from "../pages/config/route-data.ts";
 import { renderSidebarDropdown } from "./app-sidebar-nav-menus.ts";
+import { SIDEBAR_SESSION_ACTIVITY_OPTIONS } from "./app-sidebar-session-device.ts";
 import { countSidebarSessionFilters } from "./app-sidebar-session-filter-summary.ts";
 import {
   SIDEBAR_SESSION_SORT_OPTIONS,
@@ -361,8 +362,8 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
     host.sessionsShowCron ||
     host.sessionsShowSystem ||
     host.sessionsShowPreview ||
-    host.effectiveSessionSortMode() !== "created" ||
-    (!rosterMode && (grouping !== "category" || host.sessionsEmptyGroupsMode !== "filtering"));
+    host.effectiveSessionSortMode() !== "activity" ||
+    (!rosterMode && (grouping !== "none" || host.sessionsEmptyGroupsMode !== "filtering"));
   const ownerVisible = owners.length > 0 || ownerFilterId !== null || involvingMe;
   // The mobile sheet has no hover or room for flyouts: choices open as sheet pages.
   const sheet = isMobileNavLayout();
@@ -437,15 +438,19 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
                         )
                         ?.focus();
                       host.setSessionOwnerFilter(null);
+                      host.setSessionDeviceFilter("all");
+                      host.setSessionActivityFilter("all");
                       host.sessionOrganizer.setSessionsStatusFilter("active");
                       host.sessionOrganizer.setSessionsShowCron(false);
                       host.sessionOrganizer.setSessionsShowSystem(false);
                       host.sessionOrganizer.setSessionsShowPreview(false);
-                      host.setSessionSortMode("created");
+                      host.setSessionSortMode("activity");
                       if (!rosterMode) {
                         // A displayed default can hide a saved Person choice until owners return.
-                        if (grouping !== "category") {
-                          host.sessionOrganizer.setSessionsGrouping("category");
+                        const hiddenPersonGrouping =
+                          host.sessionsGrouping === "person" && grouping === "category";
+                        if (!hiddenPersonGrouping && grouping !== "none") {
+                          host.sessionOrganizer.setSessionsGrouping("none");
                         }
                         host.setSessionsEmptyGroupsMode("filtering");
                       }
@@ -495,6 +500,41 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
                 </div>`
               : nothing
           }
+          ${renderPicker({
+            id: "sidebar-sessions-view",
+            label: t("chat.sidebar.view"),
+            value: host.sessionActivityFilter,
+            sheet,
+            showOptionTooltips: false,
+            options: SIDEBAR_SESSION_ACTIVITY_OPTIONS.map((option) => ({
+              value: option.value,
+              label: t(option.labelKey),
+            })),
+            onChange: (value) => {
+              const option = SIDEBAR_SESSION_ACTIVITY_OPTIONS.find(
+                (entry) => entry.value === value,
+              );
+              if (option) host.setSessionActivityFilter(option.value);
+            },
+          })}
+          ${renderPicker({
+            id: "sidebar-sessions-device",
+            label: t("chat.sidebar.device"),
+            value: host.sessionDeviceFilter,
+            sheet,
+            showOptionTooltips: false,
+            options: [
+              { value: "all", label: t("chat.sidebar.allDevices") },
+              ...host
+                .sessionDeviceOptions()
+                .map((device) => ({
+                  value: device.id,
+                  label: device.label,
+                  description: device.title,
+                })),
+            ],
+            onChange: (value) => host.setSessionDeviceFilter(value),
+          })}
           ${segmented(
             "sidebar-sessions-status",
             t("sessionsView.status"),
@@ -539,6 +579,7 @@ export function renderSidebarSessionSortMenuForController(controller: SidebarMen
                       ? [{ value: "person", label: t("sessionsView.groupByPerson") }]
                       : []),
                     { value: "none", label: t("sessionsView.groupByNone") },
+                    { value: "date", label: t("sessionsView.groupByDate") },
                   ],
                   onChange: (value) =>
                     host.sessionOrganizer.setSessionsGrouping(value as SidebarSessionsGrouping),

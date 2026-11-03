@@ -32,8 +32,7 @@ import { sidebarPanelDefinitions } from "../chat-pane-embedded-panels.ts";
 import { readLinkFavicon, type LinkFaviconFetcher } from "../link-favicon-cache.ts";
 import {
   SIDEBAR_GEOMETRY_COMMIT_EVENT,
-  SIDEBAR_MIN_HEIGHT_PX,
-  SIDEBAR_MIN_WIDTH_PX,
+  sidebarPanelSizeForFraction,
   sidebarDock,
   sidebarMainPanel,
   sidebarSidePanels,
@@ -560,12 +559,13 @@ class ChatSidebarRegion extends OpenClawLightDomElement {
             : (bounds?.[dimension] ?? 0);
         const measured = measure();
         const total = measured.total || regionSize;
-        const requested =
-          total *
-          (measured.panelBeforeMain ? event.detail.splitRatio : 1 - event.detail.splitRatio);
-        const minimum = dock === "bottom" ? SIDEBAR_MIN_HEIGHT_PX : SIDEBAR_MIN_WIDTH_PX;
-        const maximum = Math.max(minimum, regionSize * 0.6);
-        this.callbacks?.resizePanel(column.id, Math.max(minimum, Math.min(requested, maximum)));
+        const requested = sidebarPanelSizeForFraction(
+          measured.panelBeforeMain ? event.detail.splitRatio : 1 - event.detail.splitRatio,
+          total,
+          regionSize,
+          dock,
+        );
+        if (requested !== undefined) this.callbacks?.resizePanel(column.id, requested);
       },
     });
   }
@@ -658,6 +658,28 @@ class ChatSidebarRegion extends OpenClawLightDomElement {
       const shell = this.parentElement;
       if (!this.isConnected || !shell) {
         return;
+      }
+      const column = this.layout.columns[0];
+      if (
+        column?.sideFractionPending !== undefined &&
+        this.layout.open &&
+        !this.layout.expanded &&
+        !this.narrow
+      ) {
+        const dock = sidebarDock(this.layout);
+        const dimension = dock === "bottom" ? "height" : "width";
+        const primary = shell.querySelector<HTMLElement>('[data-region="main"]');
+        const side = shell.querySelector<HTMLElement>('[data-region="side"]:not([hidden])');
+        const total =
+          (primary?.getBoundingClientRect()[dimension] ?? 0) +
+          (side?.getBoundingClientRect()[dimension] ?? 0);
+        const size = sidebarPanelSizeForFraction(
+          column.sideFractionPending,
+          total,
+          shell.getBoundingClientRect()[dimension],
+          dock,
+        );
+        if (size !== undefined) this.callbacks?.resizePanel(column.id, size);
       }
       const panel = shell.querySelector<HTMLElement>(
         ".sidebar-region__right-runtime > .side-panel",

@@ -1,6 +1,8 @@
 import { asNonNegativeFiniteNumber } from "@openclaw/normalization-core/number-coercion";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import type { ControlUiNavigationItem } from "../../../src/plugin-sdk/control-ui.js";
+import { sessionActivityTimestamp } from "../../../src/shared/session-activity-timestamp.ts";
+import { isSystemCreatedSessionRow } from "../../../src/shared/session-list-visibility.ts";
 import type { GatewayControlUiPluginTab } from "../api/gateway.ts";
 import type { GatewaySessionRow, SessionsListResult } from "../api/types.ts";
 import { SIDEBAR_NAV_ROUTES } from "../app-navigation.ts";
@@ -64,6 +66,10 @@ export function createSidebarSessionRowsComparator(
     // and single-row projections must not ask for sort facts before sorting.
     const input = (options ??= readOptions());
     if (input.sortMode !== "people") {
+      if (input.sortMode === "activity") {
+        const byActivity = sessionActivityTimestamp(b) - sessionActivityTimestamp(a);
+        return byActivity || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+      }
       return input.sortMode === "updated"
         ? compareSessionRowsByUpdatedAt(a, b)
         : compareSidebarSessionRowsByCreatedAt(a, b, input.createdOrder);
@@ -229,6 +235,9 @@ export function buildSidebarSessionNavigationState(input: {
       // A cwd or a prepared session does not prove repository identity.
       workspaceKind: row.worktree ? "worktree" : row.repository ? "checkout" : undefined,
       execNode: row.execNode,
+      systemSession: isSystemCreatedSessionRow(row),
+      placementDeviceId:
+        row.placement && "runner" in row.placement ? row.placement.runner?.deviceId : undefined,
       placementState: row.placement?.state,
       placementProviderId:
         row.placement && "providerId" in row.placement ? row.placement.providerId : undefined,
@@ -263,6 +272,8 @@ export function buildSidebarSessionNavigationState(input: {
       createdAt: row.createdAt,
       startedAt: row.startedAt,
       updatedAt: row.updatedAt,
+      lastActivityAt: row.lastActivityAt,
+      lastInteractionAt: row.lastInteractionAt,
       endedAt: row.endedAt,
       runtimeMs: row.runtimeMs,
       runtimeSampledAt,

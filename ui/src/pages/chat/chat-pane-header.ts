@@ -39,6 +39,7 @@ import { ChatPaneNativeSessionActions } from "./chat-pane-native-session-actions
 import { resolveChatPaneDesktopTarget, resolveChatPanePlacement } from "./chat-pane-placement.ts";
 import type { createChatPaneRails } from "./chat-pane-rails.ts";
 import { readChatSessionActionAccess } from "./chat-session-action-access.ts";
+import { resolveChatAgentId } from "./chat-state-route.ts";
 import { isChatRunWorking } from "./components/chat-composer.ts";
 import "./components/chat-header-session-menu.ts";
 import type {
@@ -548,6 +549,12 @@ export abstract class ChatPaneHeader extends ChatPaneDiscussion {
     const parentSession = this.observedParentSessionRow();
     const header = renderChatPaneHeader({
       paneId: this.paneId,
+      pluginActions: html`<openclaw-plugin-contributions
+        .kind=${"session-toolbar"}
+        .sessionKey=${key}
+        .agentId=${row?.agentId ?? (this.state ? resolveChatAgentId(this.state) : undefined)}
+        .presented=${this.presented}
+      ></openclaw-plugin-contributions>`,
       narrow: this.narrow,
       mergedChrome: this.mergedChrome,
       navDrawerOpen: this.navDrawerOpen,

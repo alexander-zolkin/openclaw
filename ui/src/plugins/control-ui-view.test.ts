@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
+  ControlUiAction,
   ControlUiHost,
   ControlUiReplacement,
   ControlUiSurfaceProps,
@@ -13,6 +14,7 @@ import {
   type PresentationBinding,
 } from "../lit/presentation-binding.ts";
 import { createApplicationContextProvider } from "../test-helpers/application-context.ts";
+import { registerSessionPluginAction } from "../test-helpers/control-ui-plugin-action.ts";
 import { renderPluginSurface } from "./control-ui-view.ts";
 import "./control-ui-view.runtime.ts";
 
@@ -117,6 +119,7 @@ function mountSurface(initial?: ControlUiReplacement<"workspace" | "composer">) 
   document.body.append(provider);
   return {
     host,
+    context,
     provider,
     reportError,
     listeners,
@@ -132,6 +135,68 @@ function mountSurface(initial?: ControlUiReplacement<"workspace" | "composer">) 
 
 afterEach(() => {
   document.body.replaceChildren();
+});
+
+describe("session toolbar contributions", () => {
+  it.each(["terminal", "unknown-plugin-icon"])(
+    "keeps %s actions accessible and bound to their pane lifetime",
+    async (icon) => {
+      const { context, provider } = mountSurface();
+      const row = {
+        key: "agent:review:target",
+        agentId: "review",
+        sessionId: "target-id",
+        label: "Target chat",
+      };
+      Object.assign(context, {
+        sessions: { state: { result: { sessions: [row] } }, subscribe: () => () => {} },
+      });
+      const release = createDeferred<void>();
+      const finished = createDeferred<void>();
+      const run = vi.fn<ControlUiAction["run"]>(async (invocation) => {
+        try {
+          await release.promise;
+          invocation.host.sessions.open({
+            sessionKey: invocation.sessionKey!,
+            agentId: invocation.agentId,
+          });
+        } finally {
+          finished.resolve();
+        }
+      });
+      const { open } = registerSessionPluginAction(context, {
+        id: "terminal",
+        label: "Open current terminal",
+        icon,
+        placement: "session-toolbar",
+        run,
+      });
+      const contribution = document.createElement("openclaw-plugin-contributions");
+      Object.assign(contribution, {
+        kind: "session-toolbar",
+        sessionKey: row.key,
+        agentId: row.agentId,
+      });
+      provider.append(contribution);
+      await vi.waitFor(() =>
+        expect(
+          contribution.querySelector('button[aria-label="Open current terminal"]'),
+        ).not.toBeNull(),
+      );
+      const button = contribution.querySelector<HTMLButtonElement>("button")!;
+      expect(Boolean(button.querySelector("svg"))).toBe(icon === "terminal");
+      expect(button.textContent?.trim()).toBe(icon === "terminal" ? "" : "Open current terminal");
+      button.click();
+      await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
+      const invocation = run.mock.calls[0]![0];
+      expect(invocation).toMatchObject({ sessionKey: row.key, agentId: row.agentId, session: row });
+      Object.assign(contribution, { sessionKey: "agent:review:replacement" });
+      expect(invocation.signal.aborted).toBe(true);
+      release.resolve();
+      await finished.promise;
+      expect(open).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("native UI built-in delegation", () => {

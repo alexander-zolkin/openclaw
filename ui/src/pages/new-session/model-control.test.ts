@@ -30,6 +30,77 @@ afterEach(() => {
 });
 
 describe("new-session model controls", () => {
+  it("keeps an admin shared-account choice and Automatic local to the new-chat draft", async () => {
+    const availableSol = { ...sol, available: true };
+    const { control, context, request, draw, changed } = setup([availableSol]);
+    const agent = { id: "main", model: { primary: "openai/gpt-5.6-sol" } };
+    const profileId = "openai:first@example.test";
+    Object.assign(context.gateway.snapshot, {
+      selfUser: { id: "gateway-owner", name: "Owner" },
+      hello: {
+        ...context.gateway.snapshot.hello,
+        auth: { role: "operator", scopes: ["operator.admin"] },
+      },
+    });
+    request.mockImplementation(async (method: string) => {
+      if (method === "users.listModelAccounts")
+        return { profileId: "gateway-owner", accounts: [], links: [] };
+      if (method === "models.authStatus")
+        return {
+          ts: 1,
+          providers: [
+            {
+              provider: "openai",
+              displayName: "OpenAI",
+              status: "ok",
+              profiles: [{ profileId, type: "oauth", status: "ok", email: "first@example.test" }],
+            },
+          ],
+        };
+      return {
+        models: [availableSol],
+        accountSelection: { kind: "automatic", label: "Automatic account selection" },
+      };
+    });
+    control.load(context, "main", true, { agent });
+    await vi.waitFor(() =>
+      expect(draw(agent).querySelector("[data-chat-account-group-toggle]")).not.toBeNull(),
+    );
+    draw(agent).querySelector<HTMLButtonElement>("[data-chat-account-group-toggle]")!.click();
+    await vi.waitFor(() =>
+      expect(
+        draw(agent).querySelector(`[data-chat-account-option="account:${profileId}"]`),
+      ).not.toBeNull(),
+    );
+    draw(agent)
+      .querySelector<HTMLButtonElement>(`[data-chat-account-option="account:${profileId}"]`)!
+      .click();
+    await vi.waitFor(() => expect(control.accountSelectionReady()).toBe(true));
+    expect(control.modelForSubmission()).toBe(`openai/gpt-5.6-sol@${profileId}`);
+    expect(
+      request.mock.calls.every(
+        ([method]) =>
+          method === "models.list" ||
+          method === "models.authStatus" ||
+          method === "users.listModelAccounts",
+      ),
+    ).toBe(true);
+    expect(
+      request.mock.calls
+        .filter(([method]) => method === "models.list")
+        .every(([, params]) => !params?.authProfileId),
+    ).toBe(true);
+    expect(changed).not.toHaveBeenCalled();
+    const automatic = draw(agent).querySelector<HTMLButtonElement>(
+      '[data-chat-account-option="automatic"]',
+    )!;
+    expect(automatic.disabled).toBe(false);
+    automatic.click();
+    await vi.waitFor(() => expect(control.accountSelectionReady()).toBe(true));
+    expect(control.modelForSubmission()).not.toContain("@");
+    expect(changed).not.toHaveBeenCalled();
+  });
+
   it("does not borrow a provider for an ambiguous draft target", async () => {
     const { control, context, draw, changed } = setup([
       {

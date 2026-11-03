@@ -1,3 +1,4 @@
+import path from "node:path";
 import { splitSystemPromptRelocatableBoundary } from "@openclaw/ai/internal/shared";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { uniqueStrings } from "@openclaw/normalization-core/string-normalization";
@@ -110,6 +111,7 @@ import { normalizeToolPolicyName } from "../tool-policy.js";
 import { assertNativeCronCreatorCapabilities } from "../tools/cron-tool-creator-cap.js";
 import { redactRunIdentifier, resolveRunWorkspaceDir } from "../workspace-run.js";
 import {
+  DEFAULT_AGENTS_FILENAME,
   DEFAULT_BOOTSTRAP_FILENAME,
   isWorkspaceBootstrapPending as isWorkspaceBootstrapPendingImpl,
 } from "../workspace.js";
@@ -674,10 +676,11 @@ async function prepareCliRunContextWithinReadFence(
     : undefined;
 
   const sessionLabel = params.sessionKey ?? params.sessionId;
-  const { bootstrapFiles, contextFiles: resolvedContextFiles } = skipsTurnPreparation
+  const bootstrapWorkspaceDir = params.bootstrapWorkspaceDir ?? workspaceDir;
+  let { bootstrapFiles, contextFiles: resolvedContextFiles } = skipsTurnPreparation
     ? { bootstrapFiles: [], contextFiles: [] }
     : await resolveBootstrapContextForRunImpl({
-        workspaceDir: params.bootstrapWorkspaceDir ?? workspaceDir,
+        workspaceDir: bootstrapWorkspaceDir,
         config: params.config,
         sessionKey: params.sessionKey,
         sessionId: params.sessionId,
@@ -692,6 +695,34 @@ async function prepareCliRunContextWithinReadFence(
           warn: (message) => cliBackendLog.warn(message),
         }),
       });
+  if (!skipsTurnPreparation && path.resolve(bootstrapWorkspaceDir) !== path.resolve(workspaceDir)) {
+    // Match embedded attempts: canonical agent files own personality and
+    // memory; only AGENTS.md layers from the selected execution workspace.
+    const projectBootstrap = await resolveBootstrapContextForRunImpl({
+      workspaceDir,
+      config: params.config,
+      sessionKey: params.sessionKey,
+      sessionId: params.sessionId,
+      bootstrapUserProfileId: params.bootstrapUserProfileId,
+      chatType: runtimeChatType,
+      agentId: sessionAgentId,
+      contextMode: params.bootstrapContextMode,
+      runKind: params.bootstrapContextRunKind,
+      warn: (message) => cliBackendLog.warn(message),
+    });
+    const projectAgentsPath = path.resolve(workspaceDir, DEFAULT_AGENTS_FILENAME);
+    const projectAgents = projectBootstrap.bootstrapFiles.filter(
+      (file) =>
+        file.name === DEFAULT_AGENTS_FILENAME &&
+        !file.missing &&
+        path.resolve(file.path) === projectAgentsPath,
+    );
+    const projectAgentContext = projectBootstrap.contextFiles.filter(
+      (file) => path.resolve(file.path) === projectAgentsPath,
+    );
+    bootstrapFiles = [...bootstrapFiles, ...projectAgents];
+    resolvedContextFiles = [...resolvedContextFiles, ...projectAgentContext];
+  }
   // Ring-zero OpenClaw runs replace the bundle MCP surface entirely: no
   // loopback server, no plugin/user servers. A selectable backend also removes
   // its native tools, leaving only this openclaw stdio server.

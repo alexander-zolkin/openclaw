@@ -2315,6 +2315,81 @@ describe("prepareCliRunContext", () => {
     expect(context.systemPrompt).toContain(SHARED_CHAT_MESSAGE_TOOL_ETIQUETTE);
   });
 
+  it("loads canonical bootstrap markers while preserving the selected project cwd", async () => {
+    const canonicalWorkspace = "/synthetic/agent-workspace";
+    const projectWorkspace = "/synthetic/project-worktree";
+    const resolveBootstrapContextForRun = vi.fn(async (params: { workspaceDir: string }) => {
+      const canonical = params.workspaceDir === canonicalWorkspace;
+      const agentsPath = path.join(params.workspaceDir, "AGENTS.md");
+      const soulPath = path.join(params.workspaceDir, "SOUL.md");
+      const memoryPath = path.join(params.workspaceDir, "MEMORY.md");
+      const files = [
+        {
+          name: "AGENTS.md" as const,
+          path: agentsPath,
+          content: canonical ? "CANONICAL-AGENTS" : "PROJECT-AGENTS",
+          missing: false,
+        },
+        {
+          name: "SOUL.md" as const,
+          path: soulPath,
+          content: canonical ? "CANONICAL-SOUL" : "PROJECT-SOUL",
+          missing: false,
+        },
+        {
+          name: "MEMORY.md" as const,
+          path: memoryPath,
+          content: canonical ? "CANONICAL-MEMORY" : "PROJECT-MEMORY",
+          missing: false,
+        },
+      ];
+      return {
+        bootstrapFiles: [
+          {
+            name: "BOOTSTRAP.md" as const,
+            path: path.join(params.workspaceDir, "BOOTSTRAP.md"),
+            content: "synthetic pending bootstrap",
+            missing: false,
+          },
+          ...files,
+        ],
+        contextFiles: files.map(({ path: filePath, content }) => ({
+          path: filePath,
+          content,
+        })),
+      };
+    });
+    setCliRunnerPrepareTestDeps({ resolveBootstrapContextForRun });
+
+    const context = await fixture.prepare({
+      config: createCliBackendConfig(),
+      workspaceDir: projectWorkspace,
+      cwd: projectWorkspace,
+      bootstrapWorkspaceDir: canonicalWorkspace,
+      sessionKey: "agent:main:project-session",
+      trigger: "user",
+    });
+
+    expect(resolveBootstrapContextForRun).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ workspaceDir: canonicalWorkspace }),
+    );
+    expect(resolveBootstrapContextForRun).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ workspaceDir: projectWorkspace }),
+    );
+    expect(context.systemPrompt).toContain("CANONICAL-AGENTS");
+    expect(context.systemPrompt).toContain("CANONICAL-SOUL");
+    expect(context.systemPrompt).toContain("CANONICAL-MEMORY");
+    expect(context.systemPrompt).toContain("PROJECT-AGENTS");
+    expect(context.systemPrompt).not.toContain("PROJECT-SOUL");
+    expect(context.systemPrompt).not.toContain("PROJECT-MEMORY");
+    expect(context.params).toMatchObject({
+      workspaceDir: projectWorkspace,
+      cwd: projectWorkspace,
+    });
+  });
+
   it("invalidates content drift when the backend cannot receive a resumed system prompt", async () => {
     const { dir } = fixture.session;
     const context = await fixture.prepare({

@@ -140,6 +140,8 @@ export type SidebarRecentSession = {
   worktreeId?: string;
   workspaceKind?: "worktree" | "checkout";
   execNode?: string;
+  placementDeviceId?: string;
+  systemSession?: boolean;
   placementState?: SessionPlacementState;
   placementProviderId?: string;
   placementProfileId?: string;
@@ -185,6 +187,8 @@ export type SidebarRecentSession = {
   createdAt?: number;
   startedAt?: number;
   updatedAt?: number | null;
+  lastActivityAt?: number;
+  lastInteractionAt?: number;
   endedAt?: number;
   runtimeMs?: number;
   runtimeSampledAt?: number;
@@ -328,6 +332,7 @@ export function sidebarSessionStateId(key: string): string {
 }
 
 const SIDEBAR_SESSION_GROUPING_STORAGE_KEY = "openclaw:sidebar:sessions:grouping";
+const SIDEBAR_SESSION_FLAT_MIGRATION_KEY = "openclaw:sidebar:sessions:flat-list-v1";
 const SIDEBAR_SESSION_CATALOG_GROUPING_STORAGE_KEY = "openclaw:sidebar:sessions:catalog-grouping";
 const SIDEBAR_SESSION_SHOW_PREVIEW_STORAGE_KEY = "openclaw:sidebar:sessions:show-preview";
 const SIDEBAR_SESSION_SHOW_CRON_STORAGE_KEY = "openclaw:sidebar:sessions:show-cron";
@@ -343,9 +348,21 @@ export const SIDEBAR_HIDDEN_SESSION_CATALOGS_CHANGED_EVENT =
   "openclaw:sidebar-hidden-catalogs-changed";
 
 export function loadStoredSidebarSessionsGrouping(): SidebarSessionsGrouping {
-  return normalizeSidebarSessionsGrouping(
-    getSafeLocalStorage()?.getItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY),
-  );
+  const storage = getSafeLocalStorage();
+  const stored = storage?.getItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY);
+  // The trial now starts with one timeline. Migrate only the old automatic
+  // category/type split once; later explicit grouping choices remain authoritative.
+  if (storage?.getItem(SIDEBAR_SESSION_FLAT_MIGRATION_KEY) !== "true") {
+    try {
+      storage?.setItem(SIDEBAR_SESSION_FLAT_MIGRATION_KEY, "true");
+      if (stored === "category" || stored === "kind")
+        storage?.setItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY, "none");
+    } catch {
+      /* Keep the in-memory view usable when browser storage is blocked. */
+    }
+    if (stored === "category" || stored === "kind") return "none";
+  }
+  return stored == null ? "none" : normalizeSidebarSessionsGrouping(stored);
 }
 
 export function loadStoredSidebarCatalogGrouping(): CatalogProjectGrouping {
@@ -398,7 +415,7 @@ export function loadStoredSidebarSessionSortMode(): SidebarSessionSortMode {
   const stored = getSafeLocalStorage()?.getItem(SIDEBAR_SESSION_SORT_MODE_STORAGE_KEY);
   // "people" stays readable here even when the gateway later hides the
   // capability; effectiveSessionSortMode() downgrades it at render time.
-  return stored === "updated" || stored === "people" ? stored : "created";
+  return stored === "created" || stored === "updated" || stored === "people" ? stored : "activity";
 }
 
 function loadStoredSidebarStringSet(
@@ -439,6 +456,7 @@ function storeSidebarSessionPreference(key: string, value: string): void {
 }
 
 export function storeSidebarSessionsGrouping(grouping: SidebarSessionsGrouping) {
+  storeSidebarSessionPreference(SIDEBAR_SESSION_FLAT_MIGRATION_KEY, "true");
   storeSidebarSessionPreference(SIDEBAR_SESSION_GROUPING_STORAGE_KEY, grouping);
 }
 
@@ -535,6 +553,7 @@ export function setStoredSessionCatalogHidden(catalogId: string, hidden: boolean
 }
 
 export const SIDEBAR_SESSION_SORT_OPTIONS = [
+  { mode: "activity", labelKey: "chat.sidebar.sortActivity" },
   { mode: "created", labelKey: "chat.sidebar.sortCreated" },
   { mode: "updated", labelKey: "chat.sidebar.sortUpdated" },
   { mode: "people", labelKey: "sessionsView.owners" },

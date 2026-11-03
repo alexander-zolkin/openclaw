@@ -5,6 +5,7 @@ import type {
   UserModelAccount,
   UsersListModelAccountsResult,
 } from "../../../../../packages/gateway-protocol/src/index.ts";
+import { isUserModelAuthProfileId } from "../../../../../src/state/user-model-account-id.js";
 import type { GatewayBrowserClient } from "../../../api/gateway.ts";
 import type { ModelAuthStatusResult } from "../../../api/types.ts";
 import { icons } from "../../../components/icons.ts";
@@ -12,7 +13,7 @@ import { t } from "../../../i18n/index.ts";
 import { registerModelAccountsEnglish } from "../../../i18n/locales/en-model-accounts.ts";
 import { normalizeChatModelProviderId } from "../../../lib/chat/model-ref.ts";
 import { formatUiError } from "../../../lib/format-error.ts";
-import { canonicalModelAuthProviderId } from "../../../lib/model-auth.ts";
+import { canonicalModelAuthProviderId, loadModelAuthStatus } from "../../../lib/model-auth.ts";
 import { handleModelOptionMouseEnter } from "./chat-model-picker-search.ts";
 
 registerModelAccountsEnglish();
@@ -21,6 +22,7 @@ type AccountInventory = {
   model: string;
   selection: ChatAccountSelection;
   accounts: UserModelAccount[];
+  sharedAuthStatus?: ModelAuthStatusResult;
   nextCursor?: string;
   loading: boolean;
   open: boolean;
@@ -35,15 +37,24 @@ export type ChatModelAccountSection = {
   onClose: () => void;
 };
 
+export type ChatModelAccountOption = Pick<
+  UserModelAccount,
+  "authProfileId" | "provider" | "label"
+> & {
+  shared?: true;
+};
+
 export function renderChatModelAccountControl(params: {
   modelAuthStatusResult?: ModelAuthStatusResult | null;
+  agentId?: string;
+  canSelectSharedAccounts?: () => boolean;
   owner: object;
   client: GatewayBrowserClient | null | undefined;
   selection: ChatAccountSelection | null | undefined;
   model: string;
   disabled: boolean;
   ownsSelection: () => boolean;
-  onSelect: (account: UserModelAccount) => Promise<boolean>;
+  onSelect: (account: ChatModelAccountOption) => Promise<boolean>;
   onAutomatic?: () => void;
   onManage?: () => void;
   onRequestUpdate: () => void;
@@ -80,15 +91,40 @@ export function renderChatModelAccountControl(params: {
     currentInventory.error = null;
     params.onRequestUpdate();
     try {
-      const result = await client.request<UsersListModelAccountsResult>(
-        "users.listModelAccounts",
-        cursor ? { cursor } : {},
-      );
+      const [personal, shared] = await Promise.allSettled([
+        client.request<UsersListModelAccountsResult>(
+          "users.listModelAccounts",
+          cursor ? { cursor } : {},
+        ),
+        params.canSelectSharedAccounts?.()
+          ? params.modelAuthStatusResult
+            ? Promise.resolve(params.modelAuthStatusResult)
+            : params.agentId
+              ? loadModelAuthStatus(client, { agentId: params.agentId })
+              : Promise.resolve(undefined)
+          : Promise.resolve(undefined),
+      ]);
       if (ownsInventory()) {
-        currentInventory.accounts = cursor
-          ? [...currentInventory.accounts, ...result.accounts]
-          : result.accounts;
-        currentInventory.nextCursor = result.nextCursor;
+        if (shared.status === "fulfilled" && params.canSelectSharedAccounts?.()) {
+          currentInventory.sharedAuthStatus = shared.value;
+        }
+        if (personal.status === "fulfilled") {
+          currentInventory.accounts = cursor
+            ? [...currentInventory.accounts, ...personal.value.accounts]
+            : personal.value.accounts;
+          currentInventory.nextCursor = personal.value.nextCursor;
+        } else {
+          currentInventory.error = formatUiError(
+            personal.reason,
+            t("profilePage.modelAccounts.inventoryFailed"),
+          );
+        }
+        if (shared.status === "rejected") {
+          currentInventory.error = formatUiError(
+            shared.reason,
+            t("profilePage.modelAccounts.inventoryFailed"),
+          );
+        }
       }
     } catch (error) {
       if (ownsInventory()) {
@@ -108,14 +144,38 @@ export function renderChatModelAccountControl(params: {
     ? normalizeChatModelProviderId(params.model.slice(0, params.model.indexOf("/")))
     : "";
   const currentId = selection.kind === "automatic" ? undefined : selection.authProfileId;
+  const authStatus = params.modelAuthStatusResult ?? currentInventory.sharedAuthStatus;
   const profiles =
-    params.modelAuthStatusResult?.providers
+    authStatus?.providers
       .filter(
         (p) =>
           canonicalModelAuthProviderId(normalizeChatModelProviderId(p.provider)) ===
           canonicalModelAuthProviderId(provider),
       )
       .flatMap((p) => p.profiles) ?? [];
+  const sharedAccounts: ChatModelAccountOption[] = params.canSelectSharedAccounts?.()
+    ? (authStatus?.providers ?? [])
+        .filter(
+          (entry) =>
+            normalizeChatModelProviderId(entry.authProvider ?? entry.provider) === provider,
+        )
+        .flatMap((entry) => entry.profiles)
+        .filter((profile) => !isUserModelAuthProfileId(profile.profileId))
+        .map((profile) => ({
+          authProfileId: profile.profileId,
+          provider,
+          label: profile.displayName || profile.email || profile.profileId,
+          shared: true,
+        }))
+    : [];
+  const accounts = [
+    ...new Map<string, ChatModelAccountOption>(
+      [...currentInventory.accounts, ...sharedAccounts].map((account) => [
+        account.authProfileId,
+        account,
+      ]),
+    ).values(),
+  ];
   const email = (profileId: string | undefined) =>
     profiles.find((profile) => profile.profileId === profileId)?.email;
   const selectedProfile = profiles.find((profile) => profile.profileId === currentId);
@@ -123,10 +183,10 @@ export function renderChatModelAccountControl(params: {
   const selectedIdentity = [
     ...new Set([selectedProfile?.email, selectedLabel].filter(Boolean)),
   ].join(" · ");
-  const description = (account: UserModelAccount | undefined) =>
+  const description = (account: ChatModelAccountOption | undefined) =>
     email(account?.authProfileId) ??
     (account &&
-    currentInventory.accounts.some(
+    accounts.some(
       (candidate) =>
         candidate.authProfileId !== account.authProfileId &&
         candidate.provider === account.provider &&
@@ -146,15 +206,24 @@ export function renderChatModelAccountControl(params: {
             currentInventory.accounts.find((account) => account.authProfileId === currentId),
           ),
       },
-      ...currentInventory.accounts
+      ...accounts
         .filter((account) => account.provider === provider && account.authProfileId !== currentId)
         .map((account) => ({
           value: `account:${account.authProfileId}`,
           label: account.label,
           description: description(account),
         })),
-      ...(params.onAutomatic
-        ? [{ value: "automatic", label: t("chat.modelAccounts.automatic") }]
+      ...(params.onAutomatic || selection.kind === "shared"
+        ? [
+            {
+              value: "automatic",
+              label: t("chat.modelAccounts.automatic"),
+              disabled: !params.onAutomatic,
+              ...(!params.onAutomatic
+                ? { description: t("profilePage.modelAccounts.automaticPinned") }
+                : {}),
+            },
+          ]
         : []),
       ...(currentInventory.loading
         ? [{ value: "loading", label: t("common.loading"), disabled: true }]
@@ -183,11 +252,11 @@ export function renderChatModelAccountControl(params: {
       event.preventDefault();
       void loadAccounts(currentInventory.nextCursor);
     } else {
-      const account = currentInventory.accounts.find(
+      const account = accounts.find(
         (candidate) =>
           `account:${candidate.authProfileId}` === value && candidate.provider === provider,
       );
-      if (account) {
+      if (account && (!account.shared || params.canSelectSharedAccounts?.())) {
         void params.onSelect(account);
       }
     }

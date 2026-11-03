@@ -96,6 +96,14 @@ function mountIntegratedPresenceHeader(params: {
 }
 
 describe("chat pane header", () => {
+  it("places plugin controls in the native toolbar beside the existing actions", () => {
+    const { container } = mountHeader({
+      pluginActions: html`<button aria-label="Open current terminal">Terminal</button>`,
+    });
+    const button = container.querySelector('[aria-label="Open current terminal"]');
+    expect(button?.closest(".chat-pane__actions fieldset")).not.toBeNull();
+    expect(button?.closest(".chat-pane__crumbs")).toBeNull();
+  });
   it("renders and dispatches merged chrome actions for catalog sessions", () => {
     const drawerEvents: CustomEvent<ShellNavDrawerToggleDetail>[] = [];
     const paletteEvents: Event[] = [];

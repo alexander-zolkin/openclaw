@@ -84,12 +84,12 @@ export function renderNewSessionPlaceControls({
   const nativeTerminal = catalog.isTarget(data);
   const cloudProfiles = nativeTerminal || !place.isAdmin() ? [] : gateway.cloudProfiles;
   const branches = place.repository.kind === "git" ? place.repository : null;
-  const projects = nativeTerminal ? [] : browser.projects;
+  const projects = nativeTerminal || place.directDevice ? [] : browser.projects;
   const recents = nativeTerminal
     ? []
     : browser.resolveProjectRecents({
         sessions: context?.sessions.state.result?.sessions ?? [],
-        workspace: place.workspacePath(),
+        workspace: place.folderWorkspacePath(),
         workspaceRoots: place.knownWorkspaceRoots(),
         isAdmin: place.isAdmin(),
       });
@@ -102,18 +102,22 @@ export function renderNewSessionPlaceControls({
     deviceId: place.deviceId,
     autoDevice: place.autoDevice,
     devicePlacement: place.devicePlacementRuntime()?.devicePlacement,
+    directDevicePlacement:
+      nativeTerminal || !place.isAdmin() ? undefined : place.directDeviceRequirement(),
+    directDeviceDisabledReason: gateway.deviceCatalogDisabledReason,
     deviceDisabledReason:
       place.modelControl.devicePlacementUnsupportedReason() ?? gateway.deviceCatalogDisabledReason,
   });
   const projectState = resolveProjectChip({
     folder: place.folder,
-    workspace: place.workspacePath(),
+    workspace: place.folderWorkspacePath(),
     projectId: browser.projectId,
     selectedRemoteProject: browser.remoteProject,
     projects,
     recents,
     projectQuery: browser.projectQuery,
     freshWorkspace: place.freshWorkspace,
+    folderOnly: place.directDevice,
   });
   const checkoutState = resolveCheckoutChip({
     destination: place.cloudProfileId ? "cloud" : place.remotePlacement ? "remote" : "local",
@@ -122,6 +126,7 @@ export function renderNewSessionPlaceControls({
     headBranch: branches?.headBranch,
     baseRef: place.baseRef,
     repository: Boolean(place.remoteRepository),
+    deviceFolder: place.directDevice,
   });
   const gatewayLabel = gateway.gatewayName
     ? t("newSession.gatewayNamed", { name: gateway.gatewayName })
@@ -197,11 +202,13 @@ export function renderNewSessionPlaceControls({
           isAdmin: place.isAdmin(),
           canWrite: place.canWrite(),
           folder: place.folder,
-          workspace: place.workspacePath(),
+          workspace: place.folderWorkspacePath(),
           projects,
           projectQuery: browser.projectQuery,
+          folderOnly: place.directDevice,
           projectSearchAvailable:
             !nativeTerminal &&
+            !place.directDevice &&
             canCallGatewayMethod(
               context?.gateway.snapshot,
               "projects.searchRemote",
@@ -209,12 +216,13 @@ export function renderNewSessionPlaceControls({
             ),
           projectAddAvailable:
             !nativeTerminal &&
+            !place.directDevice &&
             canCallGatewayMethod(
               context?.gateway.snapshot,
               place.remotePlacement ? "sessions.create" : "projects.add",
               "operator.write",
             ),
-          remoteProjects: browser.projectSearchResult?.projects ?? [],
+          remoteProjects: place.directDevice ? [] : (browser.projectSearchResult?.projects ?? []),
           selectedRemoteProject: browser.remoteProject,
           projectSearchCredentialMissing: browser.projectSearchResult?.credential === "missing",
           projectSearchLoading: browser.projectSearchLoading,
@@ -222,7 +230,7 @@ export function renderNewSessionPlaceControls({
           projectId: browser.projectId,
           freshWorkspace: place.freshWorkspace,
           onNewWorkspace: place.remotePlacement ? () => place.selectNewWorkspace() : undefined,
-          gatewayLabel,
+          gatewayLabel: place.directDevice ? whereState.label : gatewayLabel,
           submitting,
           pendingPlacement,
           ...browser.popoverCallbacks("project"),
@@ -235,7 +243,7 @@ export function renderNewSessionPlaceControls({
           onSelectRemoteProject: (project) => place.selectRemoteProject(project),
           onApplyFolder: (folder) => place.applyFolder(folder),
           onBrowse: () =>
-            browser.selectGatewayBrowser(place.folder.trim() || place.workspacePath()),
+            browser.selectGatewayBrowser(place.folder.trim() || place.folderWorkspacePath()),
           onBrowserBack: () => browser.showRoot(),
           onRegisterProject: (path) => void browser.registerBrowserProject(path),
           onClose: () => browser.close(),
@@ -245,6 +253,7 @@ export function renderNewSessionPlaceControls({
       ? renderCheckoutChip({
           state: checkoutState,
           remotePlacement: place.remotePlacement,
+          deviceFolderAvailable: Boolean(place.deviceId) && place.isAdmin(),
           repository: Boolean(place.remoteRepository),
           folderLabel: projectState.label,
           worktree: place.worktree,

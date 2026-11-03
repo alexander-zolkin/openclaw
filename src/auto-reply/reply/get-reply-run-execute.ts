@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { normalizeArrayBackedTrimmedStringList } from "@openclaw/normalization-core/string-normalization";
-import { resolveAgentConfig, resolveAgentRunCwd } from "../../agents/agent-scope-config.js";
+import {
+  resolveAgentConfig,
+  resolveAgentRunCwd,
+  resolveAgentWorkspaceDir,
+} from "../../agents/agent-scope-config.js";
 import {
   hasLegacyAutoFallbackWithoutOrigin,
   hasSessionAutoModelFallbackProvenance,
@@ -478,6 +482,10 @@ export async function executePreparedReplyRun(state: PreparedReplyRunAdmission) 
       approvalReviewerDeviceId: normalizeOptionalString(ctx.ApprovalReviewerDeviceId),
       sessionFile: preparedSessionState.sessionFile,
       workspaceDir,
+      // CLI backends use workspaceDir as their cwd, but bootstrap identity
+      // belongs to the configured agent workspace when a session selects a
+      // project or managed worktree.
+      bootstrapWorkspaceDir: resolveAgentWorkspaceDir(cfg, agentId),
       cwd:
         normalizeOptionalString(preparedSessionState.sessionEntry?.spawnedCwd) ??
         resolveAgentRunCwd(cfg, agentId),

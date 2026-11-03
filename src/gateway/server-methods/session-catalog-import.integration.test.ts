@@ -287,6 +287,72 @@ async function createCatalog(restricted: boolean) {
 }
 
 describe("sessions.catalog.import with durable Gateway owners", () => {
+  it("seeds historical source activity for ordering and preserves later real interaction", async () => {
+    await withCatalog(async (fixture) => {
+      fixture.source.splice(
+        0,
+        fixture.source.length,
+        {
+          id: "historical-user",
+          type: "userMessage",
+          text: "Historical user message",
+          timestamp: "2025-04-01T10:00:00.000Z",
+        },
+        {
+          id: "historical-assistant",
+          type: "agentMessage",
+          text: "Historical assistant answer",
+          timestamp: "2025-04-02T10:00:00.000Z",
+        },
+      );
+      expect(await fixture.call()).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ created: true, importedItems: 2 }),
+      );
+      expect(loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key })).toMatchObject({
+        lastInteractionAt: Date.parse("2025-04-02T10:00:00.000Z"),
+      });
+
+      const recentKey = `agent:main:recent-${fixture.key.split(":").at(-1)}`;
+      const interactionAt = Date.now();
+      await upsertSessionEntryCore(
+        { agentId: "main", sessionKey: recentKey },
+        {
+          sessionId: `recent-${interactionAt}`,
+          updatedAt: interactionAt,
+          lastInteractionAt: interactionAt,
+        },
+      );
+      await fixture.projection.ensureMaterialized();
+      await fixture.projection.prepareMembership();
+      const ordered = await listProjectedSessions({
+        projection: fixture.projection,
+        context: fixture.context,
+        opts: { agentId: "main", sortBy: "activity", limit: 10 },
+      });
+      const orderedKeys = ordered.sessions.map((row) => row.key);
+      expect(orderedKeys.indexOf(recentKey)).toBeLessThan(orderedKeys.indexOf(fixture.key));
+
+      await upsertSessionEntryCore(
+        { agentId: "main", sessionKey: fixture.key },
+        { updatedAt: interactionAt, lastInteractionAt: interactionAt },
+      );
+      fixture.source.push({
+        id: "future-source-item",
+        type: "agentMessage",
+        text: "Future source answer",
+        timestamp: "2035-01-01T00:00:00.000Z",
+      });
+      expect(await fixture.call()).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ created: false, importedItems: 1 }),
+      );
+      expect(
+        loadSessionEntryReadOnly({ agentId: "main", sessionKey: fixture.key })?.lastInteractionAt,
+      ).toBe(interactionAt);
+    });
+  });
+
   it("imports and re-imports without waiting on model catalog publication", async () => {
     await withCatalog(async (fixture) => {
       const loadCatalog = vi

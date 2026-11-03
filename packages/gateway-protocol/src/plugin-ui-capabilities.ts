@@ -5,6 +5,7 @@ export const PLUGIN_UI_CAPABILITIES = [
   "panel",
   "action",
   "accessory",
+  "message-effect",
   "widget",
   "replacement",
   "link-reader",
