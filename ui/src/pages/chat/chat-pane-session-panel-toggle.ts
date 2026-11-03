@@ -103,11 +103,9 @@ export class ChatPaneSessionPanelToggleController {
     const slot = `plugin:${key}` as const;
     clearSessionPanelToggle(slot, event);
     let layout = detail.open
-      ? openSlot(owner.state.sidebarLayout, slot)
+      ? openSlot(owner.state.sidebarLayout, slot, detail)
       : closeSlot(owner.state.sidebarLayout, slot);
-    if (detail.dock) {
-      layout = setSidebarDock(layout, detail.dock);
-    }
+    if (!detail.open && detail.dock) layout = setSidebarDock(layout, detail.dock);
     this.options.updateSidebarLayout(layout);
   }
 
@@ -145,10 +143,7 @@ export class ChatPaneSessionPanelToggleController {
       this.options.updateSidebarLayout(closeSlot(owner.state.sidebarLayout, slot));
       return true;
     }
-    let layout = openSlot(owner.state.sidebarLayout, slot);
-    if (detail?.dock === "right" || detail?.dock === "bottom") {
-      layout = setSidebarDock(layout, detail.dock);
-    }
+    const layout = openSlot(owner.state.sidebarLayout, slot, detail ?? undefined);
     const panel = layout.columns
       .flatMap((column) => column.panels)
       .find((entry) => entry.slot === slot);

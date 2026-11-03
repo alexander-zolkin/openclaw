@@ -19,6 +19,7 @@ import {
   setSidebarOpen,
   sidebarActivePanel,
   sidebarMainPanel,
+  sidebarPanelSizeForFraction,
   sidebarSidePanels,
   type SidebarLayout,
 } from "./sidebar-layout.ts";
@@ -28,6 +29,32 @@ function openAll(): SidebarLayout {
 }
 
 describe("sidebar layout", () => {
+  it("opens a promoted tool above the same conversation and consumes an explicit split size", () => {
+    const original = openAll();
+    const layout = normalizeSidebarLayout(
+      openSlot(original, "terminal", { dock: "bottom", promote: true, sideFraction: 0.5 }),
+    );
+    expect(sidebarMainPanel(layout)?.slot).toBe("terminal");
+    expect(sidebarActivePanel(layout)?.slot).toBe("conversation");
+    expect(layout).toMatchObject({
+      dock: "bottom",
+      open: true,
+      expanded: false,
+      columns: [{ sideFractionPending: 0.5 }],
+    });
+    expect(original.columns[0]?.panels.some((panel) => panel.slot === "terminal")).toBe(false);
+    const size = sidebarPanelSizeForFraction(0.5, 800, 900, "bottom")!;
+    expect(size).toBe(400);
+    const resolved = normalizeSidebarLayout(
+      resizeSidebarPanel(layout, layout.columns[0]!.id, size),
+    );
+    expect(resolved.columns[0]!.height).toBe(400);
+    expect(resolved.columns[0]!.sideFractionPending).toBeUndefined();
+    expect(openSlot(resolved, "terminal", { promote: true }).columns).toEqual(resolved.columns);
+    expect(sidebarPanelSizeForFraction(0.05, 800, 900, "bottom")).toBe(220);
+    expect(sidebarPanelSizeForFraction(0.9, 800, 900, "bottom")).toBe(540);
+    expect(sidebarPanelSizeForFraction(0.5, 0, 900, "bottom")).toBeUndefined();
+  });
   it.each(["left", "right", "bottom"] as const)(
     "restores the original %s split after focusing the side in place",
     (dock) => {

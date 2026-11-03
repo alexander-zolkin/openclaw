@@ -87,6 +87,7 @@ type ChatPaneHeaderProps = {
   renameDisabledReason?: string;
   actionsDisabled?: boolean;
   panelActions: TemplateResult | typeof nothing;
+  pluginActions?: TemplateResult | typeof nothing;
   runAction?: TemplateResult | typeof nothing;
   panelLayoutActions: TemplateResult | typeof nothing;
   presence?: TemplateResult | typeof nothing;
@@ -450,6 +451,7 @@ export function renderChatPaneHeader(props: ChatPaneHeaderProps) {
         <div class="chat-pane__actions">
           ${props.runAction ?? nothing} ${props.panelLayoutActions}
           <fieldset class="chat-pane__actions" ?disabled=${props.actionsDisabled}>
+            ${props.pluginActions ?? nothing}
             ${compactSessionActions ? nothing : props.panelActions}
             ${(
               [

@@ -42,6 +42,36 @@ function client(
 }
 
 describe("ui.command gateway method", () => {
+  it("delivers an exact terminal and optional layout request only to its requesting browser", async () => {
+    const requester = client("requester");
+    const params = {
+      sessionKey: "agent:main:main",
+      agentId: "main",
+      command: {
+        kind: "panel",
+        panel: "terminal",
+        open: true,
+        terminalSessionId: "exact-pty",
+        dock: "bottom",
+        promote: true,
+        sideFraction: 0.5,
+      },
+    };
+    const result = await call(params, [requester, client("bystander")], requester);
+    expect(result.respond).toHaveBeenCalledWith(true, { ok: true });
+    expect(result.broadcastToConnIds).toHaveBeenCalledExactlyOnceWith(
+      "ui.command",
+      params,
+      new Set(["requester"]),
+    );
+    const invalid = await call(
+      { ...params, command: { ...params.command, sideFraction: 1 } },
+      [requester],
+      requester,
+    );
+    expect(invalid.respond).toHaveBeenCalledWith(false, undefined, expect.any(Object));
+    expect(invalid.broadcastToConnIds).not.toHaveBeenCalled();
+  });
   it("rejects invalid params", async () => {
     const result = await call({ command: { kind: "sidebar", visible: "yes" } }, []);
 

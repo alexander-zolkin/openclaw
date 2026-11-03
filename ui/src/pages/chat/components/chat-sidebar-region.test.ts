@@ -17,6 +17,7 @@ import {
   openSlot,
   closeSlot,
   promoteSidebarPanel,
+  resizeSidebarPanel,
   setSidebarOpen,
   setSidebarDock,
   setSidebarExpanded,
@@ -90,6 +91,36 @@ afterEach(() => {
 });
 
 describe("chat sidebar region", () => {
+  it("sizes the measured promoted split without remounting the draft or task disclosure", async () => {
+    const region = await createRegion(
+      openSlot({ columns: [] }, "terminal", { dock: "bottom", promote: true, sideFraction: 0.5 }),
+    );
+    const shell = root(region);
+    const primary = shell.querySelector<HTMLElement>(".sidebar-region__primary")!;
+    primary.dataset.region = "side";
+    const draft = primary.appendChild(document.createElement("textarea"));
+    draft.value = "Keep this draft";
+    const task = primary.appendChild(document.createElement("details"));
+    task.textContent = "Task progress";
+    task.open = true;
+    const terminal = shell.querySelector<HTMLElement>('[data-panel-slot="terminal"]')!;
+    vi.spyOn(shell, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1200, 900));
+    vi.spyOn(primary, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 450, 1200, 400));
+    vi.spyOn(terminal, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 50, 1200, 400));
+    const resize = vi.fn((id: string, size: number) => {
+      region.layout = resizeSidebarPanel(region.layout, id, size);
+    });
+    region.callbacks = { ...region.callbacks!, resizePanel: resize };
+    region.requestUpdate();
+    await vi.waitFor(() => expect(resize).toHaveBeenCalledWith(region.layout.columns[0]!.id, 400));
+    await region.updateComplete;
+    expect(region.layout.columns[0]!.sideFractionPending).toBeUndefined();
+    expect(primary.querySelector("textarea")).toBe(draft);
+    expect(draft.value).toBe("Keep this draft");
+    expect(primary.querySelector("details")).toBe(task);
+    expect(task.open).toBe(true);
+    expect(terminal.dataset.region).toBe("main");
+  });
   it("updates the conversation tab identity without relabeling other panels or their controls", async () => {
     const layout = openSlot(openSlot({ columns: [] }, "dashboard"), "workspace");
     const dashboard = layout.columns[0]!.panels.find((panel) => panel.slot === "dashboard")!;

@@ -52,6 +52,7 @@ export function updateSidebarSessionLayout(
                   width: geometry.width,
                   height: geometry.height,
                   browserWidthPending: geometry.browserWidthPending,
+                  sideFractionPending: geometry.sideFractionPending,
                 }
               : column;
           }),

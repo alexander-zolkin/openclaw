@@ -24,6 +24,8 @@ const UiPanelCommandFields = {
   kind: Type.Literal("panel"),
   open: Type.Boolean(),
   dock: Type.Optional(Type.Union([Type.Literal("bottom"), Type.Literal("right")])),
+  promote: Type.Optional(Type.Literal(true)),
+  sideFraction: Type.Optional(Type.Number({ exclusiveMinimum: 0, exclusiveMaximum: 1 })),
 };
 export const UiPanelCommandSchema = Type.Union([
   closedObject({

@@ -59,6 +59,7 @@ export function normalizeSidebarLayout(value: unknown): SidebarLayout {
   let activePanelId = "";
   let width = DEFAULT_WIDTH;
   let browserWidthPending: true | undefined;
+  let sideFractionPending: number | undefined;
   let height = DEFAULT_HEIGHT;
   for (const rawColumn of value.columns) {
     if (
@@ -109,6 +110,14 @@ export function normalizeSidebarLayout(value: unknown): SidebarLayout {
         ? clampWidth(rawColumn.width)
         : width;
     browserWidthPending = rawColumn.browserWidthPending === true ? true : undefined;
+    if (
+      typeof rawColumn.sideFractionPending === "number" &&
+      Number.isFinite(rawColumn.sideFractionPending) &&
+      rawColumn.sideFractionPending > 0 &&
+      rawColumn.sideFractionPending < 1
+    ) {
+      sideFractionPending = rawColumn.sideFractionPending;
+    }
     height =
       typeof rawColumn.height === "number" && Number.isFinite(rawColumn.height)
         ? clampHeight(rawColumn.height)
@@ -146,6 +155,7 @@ export function normalizeSidebarLayout(value: unknown): SidebarLayout {
             height,
             width,
             ...(browserWidthPending ? { browserWidthPending } : {}),
+            ...(sideFractionPending !== undefined ? { sideFractionPending } : {}),
           },
         ]
       : [];

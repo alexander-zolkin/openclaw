@@ -65,6 +65,13 @@ already registered item once using the user's existing sidebar preferences.
 
 ### Control UI conversation dock
 
+Control UI actions can use `placement: "session-toolbar"` for the native chat
+toolbar. Set `icon` to a registered host icon name, such as `terminal`, for a
+compact icon button; `label` remains its accessible name and tooltip. Unknown
+icons retain the text label. Resolvers and handlers receive that pane's session
+and agent, and retained calls end when its presentation or session changes.
+Existing `header`, `composer`, and `session` placements keep their behavior.
+
 `ControlUiHost` from `openclaw/plugin-sdk/control-ui` has this optional member:
 
 ```typescript

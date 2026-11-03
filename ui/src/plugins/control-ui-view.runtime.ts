@@ -1,6 +1,6 @@
 import { consume } from "@lit/context";
 import type { BoardGetParams } from "@openclaw/gateway-protocol";
-import { html, nothing, render, type LitElement } from "lit";
+import { html, nothing, render, type LitElement, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 import type {
@@ -24,6 +24,11 @@ import { scopeControlUiHost } from "./control-ui-scope.ts";
 import { renderPluginContribution, type ViewKind } from "./control-ui-view.ts";
 
 type ViewRegistration = ControlUiRegistration<{ mount: ControlUiView<unknown> }>;
+
+function registeredIcon(name?: string): TemplateResult | undefined {
+  // SAFETY: own-key admission restricts plugin names to the host icon registry.
+  return name && Object.hasOwn(icons, name) ? icons[name as IconName] : undefined;
+}
 
 class ControlUiPluginView extends OpenClawLightDomContentsElement {
   @consume({ context: applicationContext, subscribe: true })
@@ -297,8 +302,12 @@ class ControlUiPluginContributions extends OpenClawLightDomContentsElement {
     { entry: ControlUiRegistration<ControlUiAction>; abort: AbortController }
   >();
   @consume({ context: applicationContext, subscribe: true }) private context?: ApplicationContext;
-  @property({ attribute: false }) kind: "navigation" | "session-header" | "composer" | "header" =
-    "navigation";
+  @property({ attribute: false }) kind:
+    | "navigation"
+    | "session-header"
+    | "composer"
+    | "header"
+    | "session-toolbar" = "navigation";
   @property({ attribute: false }) sessionKey = "";
   @property({ attribute: false }) agentId?: string;
   @property({ attribute: false }) navigationKey = "";
@@ -313,7 +322,9 @@ class ControlUiPluginContributions extends OpenClawLightDomContentsElement {
     .watchStore(() => (this.kind === "navigation" ? this.context?.router : undefined))
     .watchStore(
       () =>
-        this.kind === "header" || this.kind === "composer" ? this.context?.sessions : undefined,
+        this.kind === "header" || this.kind === "composer" || this.kind === "session-toolbar"
+          ? this.context?.sessions
+          : undefined,
       () => this.retireHiddenActions(),
     );
 
@@ -403,13 +414,7 @@ class ControlUiPluginContributions extends OpenClawLightDomContentsElement {
         child = false,
         fallbackIcon = "plug",
       ) => {
-        let icon: IconName = Object.hasOwn(icons, fallbackIcon)
-          ? (fallbackIcon as IconName) // SAFETY: the own-key check admits only registered icon names.
-          : "plug";
-        if (entry.value.icon && Object.hasOwn(icons, entry.value.icon)) {
-          // SAFETY: the own-key check narrows this plugin-provided name to the icon registry.
-          icon = entry.value.icon as IconName;
-        }
+        const icon = registeredIcon(entry.value.icon) ?? registeredIcon(fallbackIcon) ?? icons.plug;
         return html`<a
           class="nav-item ${child ? "nav-item--child" : ""} ${active ? "nav-item--active" : ""}"
           href=${href}
@@ -458,7 +463,7 @@ class ControlUiPluginContributions extends OpenClawLightDomContentsElement {
             event.preventDefault();
             entry.host.navigation.openPage(entry.value.page);
           }}
-          ><span class="nav-item__icon" aria-hidden="true">${icons[icon]}</span
+          ><span class="nav-item__icon" aria-hidden="true">${icon}</span
           ><span class="nav-item__text">${entry.value.label}</span></a
         >`;
       };
@@ -523,9 +528,14 @@ class ControlUiPluginContributions extends OpenClawLightDomContentsElement {
           entry.signal,
           actionLifetime.abort.signal,
         ]);
+        const label = actionState?.label ?? entry.value.label;
+        const toolbarIcon =
+          this.kind === "session-toolbar" ? registeredIcon(entry.value.icon) : undefined;
         return html`<button
-          class="btn btn--sm"
+          class=${toolbarIcon ? "btn btn--ghost btn--icon chat-icon-btn" : "btn btn--sm"}
           type="button"
+          aria-label=${label}
+          title=${label}
           ?disabled=${actionState?.disabled ?? false}
           @click=${async () => {
             if (signal.aborted || !this.presented || !this.isConnected) {
@@ -549,7 +559,7 @@ class ControlUiPluginContributions extends OpenClawLightDomContentsElement {
             }
           }}
         >
-          ${actionState?.label ?? entry.value.label}
+          ${toolbarIcon ? html`<span aria-hidden="true">${toolbarIcon}</span>` : label}
         </button>`;
       })}`;
   }

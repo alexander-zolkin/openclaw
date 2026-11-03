@@ -21,6 +21,28 @@ export function clampHeight(height: number): number {
   return Math.min(SIDEBAR_MAX_HEIGHT_PX, Math.max(SIDEBAR_MIN_HEIGHT_PX, height));
 }
 
+/** The same native bounds apply to command-requested fractions and divider drags. */
+export function sidebarPanelSizeForFraction(
+  fraction: number,
+  total: number,
+  regionSize: number,
+  dock: SidebarDock,
+): number | undefined {
+  if (
+    !Number.isFinite(fraction) ||
+    fraction <= 0 ||
+    fraction >= 1 ||
+    !Number.isFinite(total) ||
+    total <= 0 ||
+    !Number.isFinite(regionSize) ||
+    regionSize <= 0
+  )
+    return undefined;
+  const minimum = dock === "bottom" ? SIDEBAR_MIN_HEIGHT_PX : SIDEBAR_MIN_WIDTH_PX;
+  const maximum = Math.max(minimum, regionSize * 0.6);
+  return Math.max(minimum, Math.min(total * fraction, maximum));
+}
+
 export function sidebarDock(layout: SidebarLayout): SidebarDock {
   return layout.dock === "bottom" || layout.dock === "left" ? layout.dock : "right";
 }

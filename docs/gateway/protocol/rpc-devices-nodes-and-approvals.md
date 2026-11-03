@@ -98,6 +98,15 @@ exec policy, standing-grant, or execution-authorization semantics.
 
 - `ui.command` lets an `operator.write` caller send typed layout and navigation commands to the requesting Control UI connection, which must advertise the `ui-commands` capability.
 - Commands cover pane split/close/focus, sidebar visibility, terminal/browser panel visibility and dock, and session navigation.
+- Panel commands optionally accept `promote: true` to put the requested tool in
+  the main area and keep the same conversation in the side area. `sideFraction`
+  requests the side area's initial fraction, greater than zero and less than
+  one, subject to native minimum sizes and narrow-screen presentation. The UI
+  measures its actual split, consumes the request, and saves normal pixel
+  geometry; later divider drags keep their usual behavior. For a terminal above
+  its chat, use `panel: "terminal"`, `open: true`, the exact `terminalSessionId`,
+  `promote: true`, `dock: "bottom"`, and `sideFraction: 0.5`. This only presents
+  that terminal; it does not run a command or start an AI turn.
 - The Gateway derives the recipient from the authenticated request or the agent turn's captured browser target, never from the destination session. Other connections keep their current view. A missing or disconnected requester fails with `UNAVAILABLE`; there is no broadcast fallback.
 - Standalone callers that relied on legacy broadcast delivery must initiate these actions from a Control UI connection or a turn started there. A standalone call without a browser target no longer controls connected dashboards.
 

@@ -167,7 +167,9 @@ export type ControlUiPanel = {
 export type ControlUiAction = {
   id: string;
   label: string;
-  placement: "composer" | "header" | "session";
+  placement: "composer" | "header" | "session" | "session-toolbar";
+  /** Registered host icon name. Unknown names keep the visible text label. */
+  icon?: string;
   resolve?: (context: BoardGetParams & { session?: ControlUiSession }) => {
     label?: string;
     disabled?: boolean;
