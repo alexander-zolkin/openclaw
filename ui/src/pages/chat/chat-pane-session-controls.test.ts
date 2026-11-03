@@ -7,7 +7,7 @@ import type {
   UsersListModelAccountsResult,
 } from "../../../../packages/gateway-protocol/src/index.ts";
 import { createDeferred } from "../../../../test/helpers/promise.js";
-import type { GatewaySessionRow } from "../../api/types.ts";
+import type { GatewaySessionRow, ModelAuthStatusResult } from "../../api/types.ts";
 import type { ApplicationGatewaySnapshot } from "../../app/gateway.ts";
 import {
   captureChatOutboxAdmission,
@@ -71,6 +71,7 @@ describe("chat account selection", () => {
   function mountAccountControl(
     request: GatewayRequestHandler,
     selection: ChatAccountSelection | null,
+    shared?: { status: ModelAuthStatusResult; allowed: () => boolean },
   ) {
     const container = document.createElement("div");
     let current = true;
@@ -87,6 +88,8 @@ describe("chat account selection", () => {
           owner: state,
           client: state.client,
           selection: state.chatAccountSelection,
+          modelAuthStatusResult: shared?.status,
+          canSelectSharedAccounts: shared?.allowed,
           model: "openai/gpt-5.5",
           disabled: false,
           ownsSelection: () => current,
@@ -220,6 +223,131 @@ describe("chat account selection", () => {
     await vi.waitFor(() => expect(view.container.textContent).toContain("Work workspace"));
     expect(view.container.querySelector('[role="alert"]')).toBeNull();
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers administrators same-provider shared references without changing defaults", async () => {
+    const status: ModelAuthStatusResult = {
+      ts: 1,
+      providers: [
+        {
+          provider: "openai",
+          displayName: "OpenAI",
+          status: "ok",
+          profiles: [
+            {
+              profileId: "openai:first@example.test",
+              type: "oauth",
+              status: "ok",
+              email: "first@example.test",
+            },
+            {
+              profileId: "openai:second@example.test",
+              type: "oauth",
+              status: "ok",
+              email: "second@example.test",
+            },
+            {
+              profileId:
+                "personal:11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222",
+              type: "oauth",
+              status: "ok",
+              email: "private@example.test",
+            },
+          ],
+        },
+        {
+          provider: "anthropic",
+          displayName: "Anthropic",
+          status: "ok",
+          profiles: [
+            {
+              profileId: "anthropic:other",
+              type: "token",
+              status: "ok",
+              email: "other@example.test",
+            },
+          ],
+        },
+      ],
+    };
+    let allowed = true;
+    const request = vi
+      .fn()
+      .mockResolvedValue({
+        profileId: "owner",
+        accounts: [
+          {
+            authProfileId: "personal:owner:account",
+            provider: "openai",
+            label: "Personal account",
+            authType: "oauth",
+            selected: false,
+          },
+        ],
+        links: [],
+      } satisfies UsersListModelAccountsResult);
+    const view = mountAccountControl(
+      request,
+      { kind: "automatic", label: "Automatic account selection" },
+      { status, allowed: () => allowed },
+    );
+    view.open();
+    await vi.waitFor(() => expect(view.container.textContent).toContain("Personal account"));
+    expect(view.container.textContent).toContain("first@example.test");
+    expect(view.container.textContent).toContain("second@example.test");
+    expect(view.container.textContent).not.toContain("private@example.test");
+    expect(view.container.textContent).not.toContain("other@example.test");
+    view.select("account:openai:first@example.test");
+    expect(view.onSelect).toHaveBeenCalledExactlyOnceWith({
+      authProfileId: "openai:first@example.test",
+      provider: "openai",
+      label: "first@example.test",
+      shared: true,
+    });
+    expect(request.mock.calls.map(([method]) => method)).toEqual(["users.listModelAccounts"]);
+
+    allowed = false;
+    view.select("account:openai:second@example.test");
+    expect(view.onSelect).toHaveBeenCalledOnce();
+    view.draw();
+    expect(view.container.textContent).not.toContain("second@example.test");
+    expect(view.container.textContent).toContain("Personal account");
+  });
+
+  it("keeps shared choices hidden from nonadministrators and explains pinned Automatic", () => {
+    const status: ModelAuthStatusResult = {
+      ts: 1,
+      providers: [
+        {
+          provider: "openai",
+          displayName: "OpenAI",
+          status: "ok",
+          profiles: [
+            {
+              profileId: "openai:shared",
+              type: "oauth",
+              status: "ok",
+              email: "shared@example.test",
+            },
+          ],
+        },
+      ],
+    };
+    const view = mountAccountControl(
+      vi.fn(),
+      { kind: "shared", label: "Pinned account", authProfileId: "openai:pinned" },
+      { status, allowed: () => false },
+    );
+    expect(
+      view.container.querySelector('[data-chat-account-option="account:openai:shared"]'),
+    ).toBeNull();
+    const automatic = view.container.querySelector<HTMLButtonElement>(
+      '[data-chat-account-option="automatic"]',
+    );
+    expect(automatic?.disabled).toBe(true);
+    expect(automatic?.textContent).toContain("requires resetting its model");
+    automatic?.click();
+    expect(view.onSelect).not.toHaveBeenCalled();
   });
 
   it("discards a late inventory after leaving its initiating chat", async () => {
@@ -824,6 +952,7 @@ function createControlsFixture(
     requestHandlers: {
       "sessions.patch": { ok: true, key: selectedSession.key, entry: selectedSession },
       "sessions.list": sessionsResult,
+      "users.listModelAccounts": { profileId: "gateway-owner", accounts: [], links: [] },
     },
   });
   const paneState = state as unknown as ChatPageHost;
@@ -851,6 +980,63 @@ function createControlsFixture(
 }
 
 describe("chat pane model-setting permissions", () => {
+  it("pins a shared account only on the captured chat UUID and preserves the model and @ in its ID", async () => {
+    const { state, selectedSession } = createControlsFixture("operator.admin");
+    const host = state as unknown as ChatPageHost;
+    const profileId = "openai:first@example.test";
+    const status: ModelAuthStatusResult = {
+      ts: 1,
+      providers: [
+        {
+          provider: "openai",
+          displayName: "OpenAI",
+          status: "ok",
+          profiles: [{ profileId, type: "oauth", status: "ok", email: "first@example.test" }],
+        },
+      ],
+    };
+    Object.assign(host, {
+      chatAccountSelection: { kind: "automatic", label: "Automatic account selection" },
+      modelAuthStatusResult: status,
+    });
+    const container = document.createElement("div");
+    const draw = () => render(renderControls(host).composerControls, container);
+    host.requestUpdate = () => draw();
+    draw();
+    container.querySelector<HTMLButtonElement>("[data-chat-account-group-toggle]")!.click();
+    await vi.waitFor(() =>
+      expect(
+        container.querySelector(`[data-chat-account-option="account:${profileId}"]`),
+      ).not.toBeNull(),
+    );
+    const choice = container.querySelector<HTMLButtonElement>(
+      `[data-chat-account-option="account:${profileId}"]`,
+    )!;
+    choice.click();
+    await vi.waitFor(() =>
+      expect(
+        state.request.mock.calls.find(([method]) => method === "sessions.patch")?.[1],
+      ).toMatchObject({
+        key: selectedSession.key,
+        expectedSessionId: "existing-session",
+        model: `openai/gpt-test-a@${profileId}`,
+      }),
+    );
+    expect(
+      state.request.mock.calls
+        .filter(([method]) => method.startsWith("users."))
+        .map(([method]) => method),
+    ).toEqual(["users.listModelAccounts"]);
+    const patchCount = state.request.mock.calls.filter(
+      ([method]) => method === "sessions.patch",
+    ).length;
+    selectedSession.sessionId = "replacement-session";
+    choice.click();
+    expect(state.request.mock.calls.filter(([method]) => method === "sessions.patch")).toHaveLength(
+      patchCount,
+    );
+  });
+
   it.each([
     { sessionKey: "agent:work:main", rowAgentId: "work", sharingRole: "owner", allowed: true },
     { sessionKey: "global", rowAgentId: "main", sharingRole: "owner", allowed: false },

@@ -1,5 +1,4 @@
 import { DEFAULT_GATEWAY_REQUEST_TIMEOUT_MS } from "@openclaw/gateway-client/browser";
-import type { UserModelAccount } from "@openclaw/gateway-protocol";
 import type { GatewayAgentRow, ModelCatalogEntry, ModelCatalogResult } from "../../api/types.ts";
 import type { ApplicationContext } from "../../app/context.ts";
 import { hasOperatorWriteAccess } from "../../app/operator-access.ts";
@@ -16,7 +15,10 @@ import { ModelCatalogReader } from "../../lib/model-catalog-reader.ts";
 import { resolveModelCatalogState } from "../../lib/model-catalog-store.ts";
 import { normalizeAgentId } from "../../lib/sessions/session-key.ts";
 import { requiresChatModelSetup } from "../chat/chat-model-setup.ts";
-import { renderChatModelAccountControl } from "../chat/components/chat-model-account-control.ts";
+import {
+  renderChatModelAccountControl,
+  type ChatModelAccountOption,
+} from "../chat/components/chat-model-account-control.ts";
 import { renderChatModelControls } from "../chat/components/chat-model-controls.ts";
 import { navigateToModelProvider } from "../model-providers/navigation.ts";
 import { CatalogTargetDiscovery } from "./catalog-target.ts";
@@ -55,9 +57,7 @@ export class NewSessionModelControl extends NewSessionModelSelection {
   private metadataIdentityId: string | undefined;
   private metadataGateway: ApplicationContext["gateway"] | undefined;
   private metadataHello: ApplicationContext["gateway"]["snapshot"]["hello"] | undefined;
-  private draftAccount:
-    | (Pick<UserModelAccount, "authProfileId" | "provider"> & { model: string })
-    | undefined;
+  private draftAccount: (ChatModelAccountOption & { model: string }) | undefined;
   private restoringPreference = false;
   private pendingPreference: NewSessionPreference | null | undefined;
   private pendingAgent: GatewayAgentRow | undefined;
@@ -200,7 +200,14 @@ export class NewSessionModelControl extends NewSessionModelSelection {
 
   private publishMetadataCatalog(result: ModelCatalogResult) {
     this.assignMetadataCatalog(result);
-    this.metadataState.accountSelection = result.accountSelection;
+    this.metadataState.accountSelection = this.draftAccount?.shared
+      ? {
+          kind: "shared",
+          authProfileId: this.draftAccount.authProfileId,
+          label: this.draftAccount.label,
+          source: "user",
+        }
+      : result.accountSelection;
     if (!this.draftAccount && this.pendingSelectionGeneration === this.selectionGeneration) {
       if (this.initialModelPending && !result.modelSelectionPolicy?.restricted) {
         this.resetSelection(this.initialModel);
@@ -245,18 +252,30 @@ export class NewSessionModelControl extends NewSessionModelSelection {
     this.updateMetadataState({ ...this.metadataState, status: "error" });
   }
 
-  private selectDraftAccount(account: UserModelAccount, model: string): Promise<boolean> {
+  private selectDraftAccount(account: ChatModelAccountOption, model: string): Promise<boolean> {
     const client = this.metadataClient;
     if (!client || !model) {
       return Promise.resolve(false);
     }
     this.selectionGeneration += 1;
     this.restoringPreference = false;
-    this.draftAccount = { authProfileId: account.authProfileId, provider: account.provider, model };
-    const requestedScope = { agentId: this.agentId, authProfileId: account.authProfileId };
+    this.draftAccount = { ...account, model };
+    // Shared references use the ordinary catalog; the scoped account preview is
+    // reserved for credentials owned by the requesting human.
+    const requestedScope = {
+      agentId: this.agentId,
+      ...(!account.shared ? { authProfileId: account.authProfileId } : {}),
+    };
     this.metadataState = {
       catalog: [],
-      accountSelection: this.metadataState.accountSelection,
+      accountSelection: account.shared
+        ? {
+            kind: "shared",
+            authProfileId: account.authProfileId,
+            label: account.label,
+            source: "user",
+          }
+        : this.metadataState.accountSelection,
       hasSnapshot: false,
       status: "loading",
     };
@@ -361,7 +380,9 @@ export class NewSessionModelControl extends NewSessionModelSelection {
     const selectionGeneration = this.selectionGeneration;
     const scope = {
       agentId: normalizedAgentId,
-      ...(this.draftAccount ? { authProfileId: this.draftAccount.authProfileId } : {}),
+      ...(this.draftAccount && !this.draftAccount.shared
+        ? { authProfileId: this.draftAccount.authProfileId }
+        : {}),
     };
     const previousScope = this.metadataScope;
     const boundScope = this.bindMetadataSubscription(client, scope);
@@ -460,8 +481,16 @@ export class NewSessionModelControl extends NewSessionModelSelection {
       !this.ownsMetadata() ||
       this.metadataReader.pending ||
       this.metadataState.status !== "ready" ||
-      selection?.kind !== "personal" ||
+      !selection ||
+      selection.kind === "automatic" ||
+      selection.kind !== (this.draftAccount.shared ? "shared" : "personal") ||
       selection.authProfileId !== this.draftAccount.authProfileId
+    ) {
+      return false;
+    }
+    if (
+      this.draftAccount.shared &&
+      !this.pendingContext?.gateway.snapshot.hello?.auth?.scopes?.includes("operator.admin")
     ) {
       return false;
     }
@@ -594,6 +623,10 @@ export class NewSessionModelControl extends NewSessionModelSelection {
           owner: this,
           client,
           selection: ownsSelection() && snapshot?.selfUser ? accountSelection : undefined,
+          agentId: options.agentId,
+          canSelectSharedAccounts: () =>
+            options.context?.gateway.snapshot.hello?.auth?.scopes?.includes("operator.admin") ===
+            true,
           model,
           disabled:
             options.sending || !model || !hasOperatorWriteAccess(snapshot?.hello?.auth ?? null),

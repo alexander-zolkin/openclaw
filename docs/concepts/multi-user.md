@@ -102,6 +102,14 @@ Open the model menu in **New session** or an existing chat. Expand the **Account
 
 The account control shows a person-level label for someone else's personal account, not its private email, provider account label, or account id. The label describes the selection, not a billing receipt: configured shared failover accounts can still be used.
 
+Gateway administrators can also select an existing same-provider shared profile
+from **Account**, including profiles added under **Provider profiles**. This pins
+the credential reference to the current chat, or keeps it local to a new-chat
+draft; it does not change provider priority or copy credentials. Other people's
+personal accounts remain excluded. In an existing chat with a shared profile pin,
+the picker currently requires another explicit account choice rather than an
+automatic-selection reset.
+
 Chat status and model listings identify a selected personal credential as **personal account**, without exposing its private label, email, or account id.
 
 ### CLI and Custodian
