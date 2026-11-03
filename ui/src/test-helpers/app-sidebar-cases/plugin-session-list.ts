@@ -45,6 +45,7 @@ describe("AppSidebar session-list replacement", () => {
         panels: new Map(),
         actions: new Map(),
         accessories: new Map(),
+        userMessageEffects: new Map(),
         widgets: new Map(),
         replacements: new Map(),
       },

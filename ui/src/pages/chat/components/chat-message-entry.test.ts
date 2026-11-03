@@ -3,9 +3,10 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatQueueItem } from "../../../lib/chat/chat-types.ts";
+import type { ChatQueueItem, MessageGroup } from "../../../lib/chat/chat-types.ts";
 import { createTestTranscript } from "../chat-view.test-helpers.ts";
 import { rememberLiveTerminalRun } from "../terminal-message-identity.ts";
+import { ChatMessageEntryAnimations } from "./chat-message-entry.ts";
 import { toggleTranscriptSearch } from "./chat-thread-interactions.ts";
 import { renderChatThread } from "./chat-thread.ts";
 import {
@@ -265,6 +266,143 @@ describe("chat transcript entry lifecycle", () => {
     } finally {
       view.transcript.hostDisconnected();
     }
+  });
+
+  it("delivers one captured plugin effect after the new user row commits", async () => {
+    const dispatch = vi.fn(() => true);
+    const capture = vi.fn(() => dispatch);
+    const entries = new Map<string, string>([["persisted-user-1", "persisted-user-1"]]);
+    const animations = new ChatMessageEntryAnimations(capture);
+
+    // First projection establishes history and intentionally admits no effects.
+    animations.sync(entries, true);
+    expect(capture).not.toHaveBeenCalled();
+
+    const live = new Map<string, string>([...entries, ["pending:send-2", "pending:send-2"]]);
+    animations.sync(live, true, new Set(["pending:send-2"]));
+    expect(capture).toHaveBeenCalledExactlyOnceWith("pending:send-2");
+    expect(dispatch).not.toHaveBeenCalled();
+
+    const row = document.createElement("article");
+    row.className = "chat-bubble";
+    document.body.append(row);
+    const ref = expectDefined(animations.refFor("pending:send-2"), "user row ref");
+    ref(row);
+    ref(row);
+    expect(dispatch).not.toHaveBeenCalled();
+    animations.didCommit();
+    expect(dispatch).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith(row);
+    expect(row.isConnected).toBe(true);
+    expect(row.classList.contains("chat-bubble--enter")).toBe(false);
+    ref(undefined);
+    ref(document.createElement("article"));
+    expect(dispatch).toHaveBeenCalledOnce();
+
+    // A history prepend and retained-row remount are not new message admission.
+    animations.sync(new Map<string, string>([["older-history", "older-history"], ...live]), true);
+    expect(capture).toHaveBeenCalledOnce();
+    animations.disconnect();
+    row.remove();
+  });
+
+  it("does not dispatch a captured effect when its row is removed before commit", async () => {
+    const dispatch = vi.fn(() => true);
+    const animations = new ChatMessageEntryAnimations(() => dispatch);
+    const baseline = new Map<string, string>([["persisted-user", "persisted-user"]]);
+    animations.sync(baseline, true);
+    animations.sync(
+      new Map<string, string>([...baseline, ["pending:removed", "pending:removed"]]),
+      true,
+      new Set(["pending:removed"]),
+    );
+
+    const row = document.createElement("article");
+    document.body.append(row);
+    animations.refFor("pending:removed")?.(row);
+    row.remove();
+    animations.didCommit();
+    await Promise.resolve();
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(row.classList.contains("chat-bubble--enter")).toBe(false);
+    animations.disconnect();
+  });
+
+  it("retires an effect when an optimistic user row is rejected before mounting", () => {
+    const dispatch = vi.fn(() => true);
+    const capture = vi.fn(() => dispatch);
+    const animations = new ChatMessageEntryAnimations(capture);
+    const baseline = new Map<string, string>([["persisted-user", "persisted-user"]]);
+    animations.sync(baseline, true);
+    animations.sync(
+      new Map<string, string>([...baseline, ["pending:rejected", "pending:rejected"]]),
+      true,
+      new Set(["pending:rejected"]),
+    );
+    expect(capture).toHaveBeenCalledOnce();
+
+    // The send is rejected and its virtual row disappears before the ref lands.
+    animations.didCommit();
+    animations.refFor("pending:rejected")?.(document.createElement("article"));
+    expect(dispatch).not.toHaveBeenCalled();
+
+    // A retry/replay of the same entry identity does not emit another effect.
+    animations.sync(baseline, true);
+    animations.sync(
+      new Map<string, string>([...baseline, ["pending:rejected", "pending:rejected"]]),
+      true,
+      new Set(["pending:rejected"]),
+    );
+    expect(capture).toHaveBeenCalledOnce();
+    animations.disconnect();
+  });
+
+  it("does not offer received user messages to send effects", () => {
+    const capture = vi.fn(() => vi.fn(() => true));
+    const animations = new ChatMessageEntryAnimations(capture);
+    const baseline = new Map<string, string>([["persisted-user", "persisted-user"]]);
+    animations.sync(baseline, true);
+    animations.sync(
+      new Map<string, string>([...baseline, ["channel-user", "channel-user"]]),
+      true,
+      new Set(),
+    );
+    expect(capture).not.toHaveBeenCalled();
+    animations.disconnect();
+  });
+
+  it("captures effects only for locally submitted user messages, not received user rows", () => {
+    const capture = vi.fn(() => vi.fn(() => true));
+    const animations = new ChatMessageEntryAnimations(capture);
+    const group = (key: string, message: unknown): MessageGroup => ({
+      kind: "group",
+      key,
+      role: "user",
+      messages: [{ key, message, hasVisibleContent: true }],
+      visibleContent: "text",
+      timestamp: 1,
+      isStreaming: false,
+    });
+    const received = group("msg:received-user:0", { role: "user", content: "From channel" });
+    animations.sync(animations.project([received]), true);
+
+    const local = group("msg:send:local-send:0", {
+      role: "user",
+      content: "Sent from composer",
+      __openclaw: { idempotencyKey: "local-send:user" },
+    });
+    const receivedNext = group("msg:received-next:0", { role: "user", content: "Another sender" });
+    const entries = animations.project([received, local, receivedNext]);
+    animations.sync(entries, true);
+    expect(capture).toHaveBeenCalledExactlyOnceWith("msg:send:local-send:0");
+
+    const row = document.createElement("article");
+    animations.refFor("msg:send:local-send:0")?.(row);
+    animations.refFor("msg:received-next:0")?.(document.createElement("article"));
+    expect(capture).toHaveBeenCalledOnce();
+    animations.disconnect();
   });
 
   it("retains the later live body and code choice when preceding commentary persists", async () => {

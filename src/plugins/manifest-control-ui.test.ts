@@ -39,7 +39,7 @@ describe("native Control UI manifest", () => {
         entry: "./dist/control-ui/index.js",
         styles: ["./dist/control-ui/theme.css", "dist/control-ui/theme.css"],
       },
-      ["widget", "page", "widget"],
+      ["widget", "message-effect", "page", "widget"],
     );
     const registry = loadOpenClawPlugins({
       cache: false,
@@ -49,7 +49,7 @@ describe("native Control UI manifest", () => {
     });
     expect(registry.plugins.find((record) => record.id === plugin.id)).toMatchObject({
       status: "loaded",
-      uiCapabilities: ["page", "widget"],
+      uiCapabilities: ["page", "message-effect", "widget"],
       controlUi: { entry: "dist/control-ui/index.js", styles: ["dist/control-ui/theme.css"] },
     });
   });

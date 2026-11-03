@@ -188,6 +188,30 @@ export type ControlUiAccessory = {
   mount: ControlUiView<BoardGetParams>;
 };
 
+/** Browser effect for one newly committed local user-message row in the stock transcript. */
+export type ControlUiUserMessageEffectContext = {
+  /** Exact agent-owned session shown by this chat pane. */
+  sessionKey: string;
+  agentId: string;
+  /** Stable UI message identity for this entry; contents are not exposed. */
+  messageId: string;
+  /** The stock-rendered message bubble, connected when the callback runs. */
+  element: HTMLElement;
+  /** Current stock composer textarea when one is mounted. */
+  composerElement?: HTMLTextAreaElement;
+  /** Retire retained work when this plugin contribution or activation ends. */
+  signal: AbortSignal;
+};
+export type ControlUiUserMessageEffect = {
+  id: string;
+  /**
+   * Called once when a new live/optimistic local user entry is committed and mounted.
+   * Return true if this plugin supplies its own entrance motion, suppressing
+   * the stock entry fade for this row. Do not retain the row past its signal.
+   */
+  onEntry: (context: ControlUiUserMessageEffectContext) => boolean | void;
+};
+
 export type ControlUiWidget = {
   id: string;
   label: string;
@@ -295,6 +319,8 @@ export type ControlUiHost = {
     openPanel: (id: string, session?: BoardGetParams) => void;
     registerAction: (action: ControlUiAction) => ControlUiDisposer;
     registerAccessory: (accessory: ControlUiAccessory) => ControlUiDisposer;
+    /** Observe a newly committed stock user-message row without replacing the transcript. */
+    registerUserMessageEffect: (effect: ControlUiUserMessageEffect) => ControlUiDisposer;
     registerWidget: (widget: ControlUiWidget) => ControlUiDisposer;
     registerReplacement: (replacement: ControlUiReplacement) => ControlUiDisposer;
     /** Select an owned replacement, or restore the built-in view for this surface. */

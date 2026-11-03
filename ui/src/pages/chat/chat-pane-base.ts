@@ -381,6 +381,24 @@ export abstract class ChatPaneBase extends OpenClawLightDomElement {
     onViewportResize: () => this.chatState.handleTranscriptResize(),
     canFollowEnd: () => this.state !== undefined && canAutoFollowChat(this.state),
     onReaderScroll: (towardEnd) => this.state && handleChatScrollTakeover(this.state, towardEnd),
+    captureUserMessageEffect: (sessionKey, messageId) => {
+      const state = this.state;
+      const plugins = this.context?.plugins;
+      if (
+        !state?.sessionKey ||
+        !areUiSessionKeysEquivalent(state.sessionKey, sessionKey) ||
+        !plugins
+      ) {
+        return undefined;
+      }
+      const composerElement = getChatComposerState(this.presentationId).composerTextarea;
+      return plugins.captureUserMessageEffects({
+        sessionKey: state.sessionKey,
+        agentId: resolveChatAgentId(state),
+        messageId,
+        ...(composerElement ? { composerElement } : {}),
+      });
+    },
   });
   protected readonly progressCard = new SessionProgressCardController(this, {
     gateway: () => this.context?.gateway,

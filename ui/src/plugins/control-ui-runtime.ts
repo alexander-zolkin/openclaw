@@ -45,6 +45,7 @@ const UI_CAPABILITY_BY_CONTRIBUTION = {
   panels: "panel",
   actions: "action",
   accessories: "accessory",
+  userMessageEffects: "message-effect",
   widgets: "widget",
   replacements: "replacement",
 } as const satisfies Record<
@@ -311,6 +312,7 @@ export class ControlUiPluginRuntime implements ControlUiPluginCapability {
         actions: new Map(),
         replacements: new Map(),
         accessories: new Map(),
+        userMessageEffects: new Map(),
         widgets: new Map(),
       },
       selections: new Map<ControlUiSurface, string | null>(),
@@ -507,6 +509,44 @@ export class ControlUiPluginRuntime implements ControlUiPluginCapability {
         entry.signal === selected.signal &&
         entry.value.surface === surface,
     );
+  }
+
+  captureUserMessageEffects(params: {
+    sessionKey: string;
+    agentId: string;
+    messageId: string;
+    composerElement?: HTMLTextAreaElement;
+  }): ((element: HTMLElement) => boolean) | undefined {
+    // Snapshot registrations at message admission. Activations installed later
+    // must not animate an earlier message when its virtual row eventually mounts.
+    const effects = this.registrations("userMessageEffects");
+    if (effects.length === 0) {
+      return undefined;
+    }
+    return (element) => {
+      let handled = false;
+      for (const registration of effects) {
+        if (registration.signal.aborted) {
+          continue;
+        }
+        try {
+          handled =
+            registration.value.onEntry({
+              ...params,
+              element,
+              signal: registration.signal,
+            }) === true || handled;
+        } catch (error) {
+          // A presentation effect must never break transcript rendering or send.
+          try {
+            this.reportError(registration.pluginId, error);
+          } catch {
+            // Diagnostic publication is best-effort on this render boundary.
+          }
+        }
+      }
+      return handled;
+    };
   }
 
   selectReplacement(surface: ControlUiSurface, key: string | null): void {

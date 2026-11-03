@@ -23,6 +23,11 @@ export type TranscriptCallbacks = {
   visuallyPresented?: () => boolean;
   onViewportResize?: () => void;
   onReaderScroll?: (towardEnd?: boolean) => void;
+  /** Snapshot plugin effects when a new user entry is admitted to this transcript. */
+  captureUserMessageEffect?: (
+    sessionKey: string,
+    messageId: string,
+  ) => ((element: HTMLElement) => boolean) | undefined;
   /** The pane owns reader intent; geometry-only follow must honor that policy. */
   canFollowEnd?: () => boolean;
 };

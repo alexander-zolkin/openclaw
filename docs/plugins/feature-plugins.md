@@ -143,6 +143,7 @@ Its id must match the plugin manifest. Register contributions through
 | `registerAction`                        | Composer, header, or session menu actions. An optional `resolve` function supplies the current label, hidden state, and disabled state. |
 | `registerPanel`                         | Session panels.                                                                                                                         |
 | `registerAccessory`                     | Session header content.                                                                                                                 |
+| `registerUserMessageEffect`             | One-shot presentation effects on newly admitted user-message rows.                                                                      |
 | `registerWidget`                        | Native dashboard widget views.                                                                                                          |
 | `registerReplacement`                   | `workspace`, `session-list`, `composer`, `transcript`, or `tool-result`.                                                                |
 
@@ -183,6 +184,53 @@ the Files plugin's ownership.
 Use `host.ui.invalidate()` when plugin-owned state changes the presentation of
 an action or another contribution. Namespace custom elements and CSS with the
 plugin id so independently bundled plugins can coexist.
+
+`registerUserMessageEffect` is a narrow post-render seam for effects such as a
+composer-to-transcript entrance. It runs once for a newly admitted live or
+optimistic local user row with a stable send identity, after the stock transcript
+commits and mounts that row. It does not run for received user messages, loaded
+history, pagination, remounts, or rows admitted before the plugin registered.
+The callback receives the exact message bubble, session/agent identity, stable
+message id, an optional composer textarea, and a registration-scoped
+`AbortSignal`; it receives no message text. Return `true`
+when the plugin supplies the row's entrance motion, which skips the stock entry
+fade for that row. Otherwise, stock motion stays enabled. Catch and isolate
+callback failures; they cannot block the send or transcript render. Native UI
+plugins own reduced-motion handling and must cancel animation work when the
+provided signal aborts. Declare `"message-effect"` in `uiCapabilities`.
+
+```typescript
+host.ui.registerUserMessageEffect({
+  id: "send-flight",
+  onEntry({ element, composerElement, signal }) {
+    if (
+      !composerElement ||
+      signal.aborted ||
+      globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+      !element.animate
+    ) {
+      return;
+    }
+    const source = composerElement.getBoundingClientRect();
+    const target = element.getBoundingClientRect();
+    const x = Math.min(0, source.left - target.left);
+    const y = source.top - target.top;
+    const animation = element.animate(
+      [
+        { transform: `translate(${x}px, ${y}px) scale(.94)`, opacity: 0 },
+        { opacity: 1, offset: 0.35 },
+        { transform: "none", opacity: 1 },
+      ],
+      { duration: 380, easing: "cubic-bezier(.2,.9,.25,1)" },
+    );
+    const cancel = () => animation.cancel();
+    const cleanup = () => signal.removeEventListener("abort", cancel);
+    signal.addEventListener("abort", cancel, { once: true });
+    void animation.finished.then(cleanup, cleanup);
+    return true;
+  },
+});
+```
 
 A view mounts into an `HTMLElement` and receives `context.host`, `props`,
 `signal`, `presented`, and `mountDefault`. Return an object with `update`,

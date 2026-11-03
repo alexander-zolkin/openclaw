@@ -48,6 +48,7 @@ export class ChatTranscriptController implements ReactiveController {
         initialOffset,
         (position) => saveChatSessionScrollPosition(paneId, sessionKey, position),
         this.callbacks,
+        sessionKey,
       );
       if (this.connected) {
         this.sessionVirtualizer.connect();

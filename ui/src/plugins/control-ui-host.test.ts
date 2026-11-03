@@ -30,9 +30,18 @@ function createRosterHost(request: GatewayBrowserClient["request"]) {
   const owner = {
     client,
     abort,
-    descriptor: { pluginId: "review" },
+    descriptor: { pluginId: "review", uiCapabilities: ["message-effect"] },
     disposers: new Set(),
-    contributions: { navigation: new Map() },
+    contributions: {
+      pages: new Map(),
+      navigation: new Map(),
+      panels: new Map(),
+      actions: new Map(),
+      accessories: new Map(),
+      userMessageEffects: new Map(),
+      widgets: new Map(),
+      replacements: new Map(),
+    },
   } as Omit<ControlUiPluginOwner, "host">;
   const runtime = new ControlUiPluginRuntime(() => context);
   runtime.start();
@@ -40,6 +49,7 @@ function createRosterHost(request: GatewayBrowserClient["request"]) {
     context,
     host: createControlUiPluginHost(() => context, runtime, owner),
     runtime,
+    owner,
     agents,
     sessions,
     dispose: () => {
@@ -313,6 +323,97 @@ describe("native UI roster refresh", () => {
       ).toBe("Roster unavailable");
     },
   );
+});
+
+describe("native user-message effects", () => {
+  it("snapshots active effects at row admission and retires them with their contribution", () => {
+    const client = createTestGatewayClient(vi.fn(async () => ({})));
+    const fixture = createRosterHost(client.request.bind(client));
+    onTestFinished(fixture.dispose);
+    const registrationSnapshot = vi.spyOn(fixture.runtime, "registrations");
+    registrationSnapshot.mockImplementation(((kind: string) => {
+      if (kind !== "userMessageEffects") {
+        return [];
+      }
+      return [...fixture.owner.contributions.userMessageEffects].map(([id, entry]) => ({
+        key: `review/${id}`,
+        pluginId: "review",
+        value: entry.value,
+        host: fixture.host,
+        signal: entry.signal,
+      }));
+    }) as never);
+    const composerElement = document.createElement("textarea");
+    const params = {
+      sessionKey: "agent:main:main",
+      agentId: "main",
+      messageId: "pending:send-1",
+      composerElement,
+    };
+    expect(fixture.runtime.captureUserMessageEffects(params)).toBeUndefined();
+
+    const onEntry = vi.fn(() => true);
+    const remove = fixture.host.ui.registerUserMessageEffect({ id: "send-animation", onEntry });
+    expect(fixture.runtime.errors).toEqual([]);
+    const deliver = fixture.runtime.captureUserMessageEffects(params);
+    const element = document.createElement("article");
+    expect(deliver?.(element)).toBe(true);
+    expect(onEntry).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        ...params,
+        element,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    remove();
+    expect(deliver?.(element)).toBe(false);
+    expect(onEntry).toHaveBeenCalledOnce();
+    const next = fixture.runtime.captureUserMessageEffects({
+      ...params,
+      messageId: "pending:send-2",
+      composerElement,
+    });
+    expect(next).toBeUndefined();
+  });
+
+  it("isolates effect exceptions from other plugins and the transcript", () => {
+    const client = createTestGatewayClient(vi.fn(async () => ({})));
+    const fixture = createRosterHost(client.request.bind(client));
+    onTestFinished(fixture.dispose);
+    vi.spyOn(fixture.runtime, "registrations").mockImplementation(((kind: string) => {
+      if (kind !== "userMessageEffects") {
+        return [];
+      }
+      return [...fixture.owner.contributions.userMessageEffects].map(([id, entry]) => ({
+        key: `review/${id}`,
+        pluginId: "review",
+        value: entry.value,
+        host: fixture.host,
+        signal: entry.signal,
+      }));
+    }) as never);
+    const broken = vi.fn(() => {
+      throw new Error("synthetic animation error");
+    });
+    const good = vi.fn(() => true);
+    fixture.host.ui.registerUserMessageEffect({ id: "broken", onEntry: broken });
+    fixture.host.ui.registerUserMessageEffect({ id: "good", onEntry: good });
+    const deliver = fixture.runtime.captureUserMessageEffects({
+      sessionKey: "agent:main:main",
+      agentId: "main",
+      messageId: "pending:send-1",
+    });
+    expect(() => deliver?.(document.createElement("article"))).not.toThrow();
+    expect(broken).toHaveBeenCalledOnce();
+    expect(good).toHaveBeenCalledOnce();
+    expect(fixture.runtime.errors).toContainEqual(
+      expect.objectContaining({
+        pluginId: "review",
+        message: expect.stringContaining("synthetic animation error"),
+      }),
+    );
+  });
 });
 
 describe("native UI session mutations", () => {
