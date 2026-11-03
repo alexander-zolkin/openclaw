@@ -58,3 +58,18 @@
     padding-right: 0;
   }
 }
+
+.sidebar-session-device {
+  flex: 0 1 auto;
+  max-width: 108px;
+  margin-inline-start: auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

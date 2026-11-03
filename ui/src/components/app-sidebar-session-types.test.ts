@@ -145,8 +145,8 @@ describe("sidebar session sort preference", () => {
 });
 
 describe("sidebar session grouping preference", () => {
-  it("defaults fresh profiles to dates and preserves an explicit grouping", () => {
-    expect(loadStoredSidebarSessionsGrouping()).toBe("date");
+  it("defaults fresh profiles to a flat list and preserves an explicit grouping", () => {
+    expect(loadStoredSidebarSessionsGrouping()).toBe("none");
     localStorage.setItem("openclaw:sidebar:sessions:grouping", "category");
     expect(loadStoredSidebarSessionsGrouping()).toBe("category");
   });

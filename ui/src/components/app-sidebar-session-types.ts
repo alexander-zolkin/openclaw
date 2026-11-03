@@ -140,6 +140,8 @@ export type SidebarRecentSession = {
   worktreeId?: string;
   workspaceKind?: "worktree" | "checkout";
   execNode?: string;
+  placementDeviceId?: string;
+  systemSession?: boolean;
   placementState?: SessionPlacementState;
   placementProviderId?: string;
   placementProfileId?: string;
@@ -330,6 +332,7 @@ export function sidebarSessionStateId(key: string): string {
 }
 
 const SIDEBAR_SESSION_GROUPING_STORAGE_KEY = "openclaw:sidebar:sessions:grouping";
+const SIDEBAR_SESSION_FLAT_MIGRATION_KEY = "openclaw:sidebar:sessions:flat-list-v1";
 const SIDEBAR_SESSION_CATALOG_GROUPING_STORAGE_KEY = "openclaw:sidebar:sessions:catalog-grouping";
 const SIDEBAR_SESSION_SHOW_PREVIEW_STORAGE_KEY = "openclaw:sidebar:sessions:show-preview";
 const SIDEBAR_SESSION_SHOW_CRON_STORAGE_KEY = "openclaw:sidebar:sessions:show-cron";
@@ -345,8 +348,21 @@ export const SIDEBAR_HIDDEN_SESSION_CATALOGS_CHANGED_EVENT =
   "openclaw:sidebar-hidden-catalogs-changed";
 
 export function loadStoredSidebarSessionsGrouping(): SidebarSessionsGrouping {
-  const stored = getSafeLocalStorage()?.getItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY);
-  return stored == null ? "date" : normalizeSidebarSessionsGrouping(stored);
+  const storage = getSafeLocalStorage();
+  const stored = storage?.getItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY);
+  // The trial now starts with one timeline. Migrate only the old automatic
+  // category/type split once; later explicit grouping choices remain authoritative.
+  if (storage?.getItem(SIDEBAR_SESSION_FLAT_MIGRATION_KEY) !== "true") {
+    try {
+      storage?.setItem(SIDEBAR_SESSION_FLAT_MIGRATION_KEY, "true");
+      if (stored === "category" || stored === "kind")
+        storage?.setItem(SIDEBAR_SESSION_GROUPING_STORAGE_KEY, "none");
+    } catch {
+      /* Keep the in-memory view usable when browser storage is blocked. */
+    }
+    if (stored === "category" || stored === "kind") return "none";
+  }
+  return stored == null ? "none" : normalizeSidebarSessionsGrouping(stored);
 }
 
 export function loadStoredSidebarCatalogGrouping(): CatalogProjectGrouping {
@@ -440,6 +456,7 @@ function storeSidebarSessionPreference(key: string, value: string): void {
 }
 
 export function storeSidebarSessionsGrouping(grouping: SidebarSessionsGrouping) {
+  storeSidebarSessionPreference(SIDEBAR_SESSION_FLAT_MIGRATION_KEY, "true");
   storeSidebarSessionPreference(SIDEBAR_SESSION_GROUPING_STORAGE_KEY, grouping);
 }
 
