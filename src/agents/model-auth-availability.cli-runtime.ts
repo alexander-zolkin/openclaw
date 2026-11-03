@@ -8,6 +8,7 @@ import { normalizePluginsConfig } from "../plugins/config-state.js";
 import { passesManifestOwnerBasePolicy } from "../plugins/manifest-owner-policy.js";
 import type { PluginMetadataSnapshot } from "../plugins/plugin-metadata-snapshot.types.js";
 import type { PreparedAgentCredentialModes } from "./agent-auth-credential-modes.js";
+import { resolveExplicitAuthOrderSelection } from "./auth-profiles/explicit-order.js";
 import type { AuthProfileStore } from "./auth-profiles/types.js";
 import {
   resolveCliRuntimeCanonicalProvider,
@@ -28,6 +29,7 @@ import {
   collectPreparedModelRuntimeConfiguredRefs,
   collectPreparedModelRuntimeProviderIds,
 } from "./prepared-model-runtime.configured.js";
+import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
 
 /** Builds one resolver's CLI-runtime evaluator; undefined leaves provider auth in charge. */
 export function createCliRuntimeModelAuthEvaluator(
@@ -130,6 +132,40 @@ export function createCliRuntimeModelAuthEvaluator(
           modelId: ref.modelId,
           requiredProfileId: profile.profileId,
         });
+      }
+    }
+    const nativeAuthMode = params.preparedRuntimeAuthModes?.[normalizeProviderId(runtimeProvider)];
+    if (
+      runtimeOwners?.length &&
+      !selectedProfileId &&
+      !ref.requiredProfileId &&
+      !evaluation.selectedProfileId &&
+      evaluation.evidence !== "profile" &&
+      typeof nativeAuthMode === "object" &&
+      nativeAuthMode.source === "native"
+    ) {
+      const hasExplicitOrder = [provider, runtimeProvider].some(
+        (id) =>
+          resolveExplicitAuthOrderSelection({
+            storeOrder: params.authStore.order,
+            configuredOrder: params.cfg.auth?.order,
+            providerKey: normalizeProviderId(id),
+            providerAuthKey: resolveProviderIdForAuth(id, {
+              config: params.cfg,
+              metadataSnapshot: params.metadataSnapshot,
+            }),
+          }).order !== undefined,
+      );
+      if (!hasExplicitOrder) {
+        // A prepared native login authorizes only its registered CLI runtime.
+        // Provider bearer auth and explicitly selected accounts remain independent.
+        return {
+          availability: true,
+          routeResolution: null,
+          selectedAuthMode: nativeAuthMode.mode,
+          evidence: "runtime",
+          runtimeAuth: { id: normalizeProviderId(runtimeProvider), source: "native" },
+        };
       }
     }
     if (normalizeProviderId(runtimeProvider) === normalizeProviderId(provider)) {
