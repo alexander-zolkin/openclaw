@@ -51,6 +51,7 @@ export function resolveProjectChip(params: {
   recents: readonly ProjectRecent[];
   projectQuery: string;
   freshWorkspace?: boolean;
+  folderOnly?: boolean;
 }): ProjectChipState {
   const folder = params.folder.trim();
   const selectedProject = params.projects.find((project) => project.id === params.projectId);
@@ -72,7 +73,8 @@ export function resolveProjectChip(params: {
           ? params.selectedRemoteProject.identity
           : folder
             ? pathDisplayName(folder)
-            : pathDisplayName(params.workspace) || t("newSession.folderPlaceholder"),
+            : pathDisplayName(params.workspace) ||
+              t(params.folderOnly ? "newSession.deviceHome" : "newSession.folderPlaceholder"),
     localProjects,
     recents: normalizedQuery ? [] : params.recents.filter((recent) => recent.kind !== "project"),
     showWorkspace:
@@ -87,6 +89,7 @@ export function resolveProjectChip(params: {
 export function renderProjectChip(params: {
   state: ProjectChipState;
   browseAvailable: boolean;
+  folderOnly?: boolean;
   isAdmin: boolean;
   canWrite: boolean;
   folder: string;
@@ -204,7 +207,9 @@ export function renderProjectChip(params: {
             })
           : html`
               <div class="new-session-page__picker-root">
-                <div class="new-session-page__menu-title">${t("newSession.projects")}</div>
+                <div class="new-session-page__menu-title">
+                  ${t(params.folderOnly ? "newSession.folder" : "newSession.projects")}
+                </div>
                 ${
                   params.onNewWorkspace && !query
                     ? renderSessionMenuItem(
@@ -237,25 +242,35 @@ export function renderProjectChip(params: {
                       )
                     : nothing
                 }
-                <label class="new-session-page__project-search">
-                  <span class="sr-only">${t("newSession.projectSearchPlaceholder")}</span>
-                  <input
-                    type="search"
-                    placeholder=${t("newSession.projectSearchPlaceholder")}
-                    .value=${params.projectQuery}
-                    ?disabled=${params.submitting || params.pendingPlacement}
-                    @input=${(event: Event) =>
-                      params.onProjectQueryInput(
-                        event.target instanceof HTMLInputElement ? event.target.value : "",
-                      )}
-                    @keydown=${(event: KeyboardEvent) => {
-                      if (event.key === "Enter" && cloneInput && params.projectAddAvailable) {
-                        event.preventDefault();
-                        selectClone(cloneInput);
-                      }
-                    }}
-                  />
-                </label>
+                ${
+                  params.folderOnly
+                    ? nothing
+                    : html`
+                        <label class="new-session-page__project-search">
+                          <span class="sr-only">${t("newSession.projectSearchPlaceholder")}</span>
+                          <input
+                            type="search"
+                            placeholder=${t("newSession.projectSearchPlaceholder")}
+                            .value=${params.projectQuery}
+                            ?disabled=${params.submitting || params.pendingPlacement}
+                            @input=${(event: Event) =>
+                              params.onProjectQueryInput(
+                                event.target instanceof HTMLInputElement ? event.target.value : "",
+                              )}
+                            @keydown=${(event: KeyboardEvent) => {
+                              if (
+                                event.key === "Enter" &&
+                                cloneInput &&
+                                params.projectAddAvailable
+                              ) {
+                                event.preventDefault();
+                                selectClone(cloneInput);
+                              }
+                            }}
+                          />
+                        </label>
+                      `
+                }
                 ${params.state.localProjects.map((project) =>
                   renderSessionMenuItem(
                     {

@@ -16,6 +16,7 @@ type DraftRepositorySnapshot = Readonly<{
   agentId: string;
   agents: readonly AgentSummary[];
   remotePlacement: boolean;
+  directDevice?: boolean;
   selectedProject: ProjectRecord | undefined;
   remoteProject: DraftRemoteProject | null;
   folder: string;
@@ -36,6 +37,8 @@ type DraftRepositoryCallbacks = {
 type ResolvedRepository = Exclude<DraftRepositoryState, { kind: "checking" }>;
 
 function initialRepositoryState(snapshot: DraftRepositorySnapshot): DraftRepositoryState {
+  if (snapshot.directDevice)
+    return snapshot.folder ? { kind: "direct", repoRoot: snapshot.folder } : { kind: "idle" };
   if (snapshot.remoteProject) {
     return { kind: "pending-clone", cloneUrl: snapshot.remoteProject.cloneUrl };
   }

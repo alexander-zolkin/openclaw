@@ -23,6 +23,7 @@ export type DevicePlacementOption = Readonly<
 export type DevicePlacementRequirement = Readonly<{
   requiredNodeCommands: readonly string[];
   consumesWorkerSlot: boolean;
+  sessionHost?: boolean;
 }>;
 
 const DEFAULT_DEVICE_PLACEMENT: DevicePlacementRequirement = {
@@ -34,15 +35,28 @@ function unavailableReason(
   environment: DraftEnvironment,
   requirement: DevicePlacementRequirement,
 ): string | undefined {
-  const issue = environmentIssueFact(environment);
+  const issue = environmentIssueFact(
+    requirement.sessionHost === false
+      ? {
+          ...environment,
+          issues: environment.issues?.filter((entry) => entry.code !== "worker-host-unavailable"),
+        }
+      : environment,
+  );
   if (issue !== undefined) {
     return issue;
   }
   if (environment.status !== "available") {
     return t("newSession.deviceUnavailable");
   }
-  if (environment.sessionHost !== true) {
+  if (requirement.sessionHost !== false && environment.sessionHost !== true) {
     return t("newSession.sessionHostingDisabled");
+  }
+  if (requirement.sessionHost === false) {
+    const missing = requirement.requiredNodeCommands.find(
+      (command) => !environment.invocableCommands?.includes(command),
+    );
+    return missing ? t("newSession.nodeCommandUndeclared", { command: missing }) : undefined;
   }
   if (requirement.requiredNodeCommands.length > 0) {
     const requiredCommand = environment.requiredNodeCommand;
@@ -120,7 +134,7 @@ export function projectDevicePlacements(
                 ? "enable-session-hosting"
                 : undefined,
           facts: placementDisabledReason ? [placementDisabledReason] : visibleFacts,
-          workerSlots: environment.workerSlots,
+          workerSlots: requirement.sessionHost === false ? undefined : environment.workerSlots,
           capabilities: environment.capabilities,
           invocableCommands: environment.invocableCommands,
           selectable: disabledReason === undefined,

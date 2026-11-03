@@ -29,6 +29,7 @@ export function resolveDraftSessionPlacement(
     autoDevice: boolean;
     cloudProfileId: string;
     deviceId: string;
+    directDevice?: boolean;
     cloudSelection: Readonly<{ os: string; machineClass: string }>;
   },
 ) {
@@ -42,7 +43,7 @@ export function resolveDraftSessionPlacement(
           ...(os ? { os } : {}),
           ...(machineClass ? { machineClass } : {}),
         }
-      : place.deviceId
+      : place.deviceId && !place.directDevice
         ? { kind: "device" as const, deviceId: place.deviceId }
         : place.autoDevice
           ? { kind: "auto-device" as const }

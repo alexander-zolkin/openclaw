@@ -23,10 +23,11 @@ export class DraftRestoredFolderValidation {
       folder: string;
       selectedByUser: boolean;
       isAdmin: boolean;
+      nodeId?: string;
     },
     private readonly callbacks: {
       onApprovedRootsChange: () => void;
-      onVerified: () => void;
+      onVerified: (listing: FsListDirResult) => void;
       onMissing: () => void;
       onFailed: () => void;
     },
@@ -37,7 +38,7 @@ export class DraftRestoredFolderValidation {
   }
 
   recordApprovedListing(listing: FsListDirResult) {
-    if (this.read().isAdmin) {
+    if (this.read().isAdmin || this.read().nodeId) {
       return;
     }
     const roots = new Set(this.approvedRoots);
@@ -56,6 +57,10 @@ export class DraftRestoredFolderValidation {
     this.approvedRoots = [];
   }
 
+  get loading(): boolean {
+    return this.state === "checking";
+  }
+
   get blocked(): boolean {
     return this.state !== "none";
   }
@@ -71,10 +76,17 @@ export class DraftRestoredFolderValidation {
   }
 
   validate(folder: string) {
-    const snapshot = this.read().gateway;
+    const source = this.read();
+    const nodeId = source.nodeId;
+    const snapshot = source.gateway;
     const client = snapshot?.client;
     if (snapshot?.phase !== "connected" || !client) {
-      this.restore();
+      if (nodeId) {
+        this.state = "failed";
+        this.callbacks.onFailed();
+      } else {
+        this.restore();
+      }
       return;
     }
     const requestId = ++this.requestToken;
@@ -82,24 +94,32 @@ export class DraftRestoredFolderValidation {
     const isCurrent = () => {
       const current = this.read();
       return (
-        requestId === this.requestToken && !current.selectedByUser && current.folder === folder
+        requestId === this.requestToken &&
+        (Boolean(nodeId) || !current.selectedByUser) &&
+        current.folder === folder &&
+        current.nodeId === nodeId &&
+        current.gateway?.client === client &&
+        current.gateway?.phase === "connected"
       );
     };
     void client
-      .request<FsListDirResult>("fs.listDir", { path: folder })
+      .request<FsListDirResult>("fs.listDir", {
+        ...(folder ? { path: folder } : {}),
+        ...(nodeId ? { nodeId } : {}),
+      })
       .then((result) => {
         if (!isCurrent()) {
           return;
         }
         this.recordApprovedListing(result);
         this.state = "none";
-        this.callbacks.onVerified();
+        this.callbacks.onVerified(result);
       })
       .catch((error: unknown) => {
         if (!isCurrent()) {
           return;
         }
-        if (!this.read().isAdmin || isMissingFolderError(error)) {
+        if (!nodeId && (!this.read().isAdmin || isMissingFolderError(error))) {
           this.restore();
           return;
         }

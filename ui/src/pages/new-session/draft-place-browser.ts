@@ -24,6 +24,7 @@ type DraftPickerKind = "where" | "project" | "checkout";
 type DraftPlaceBrowserSnapshot = Readonly<{
   context: ApplicationContext | undefined;
   isAdmin: boolean;
+  nodeId?: string;
 }>;
 
 type DraftProjectSelection =
@@ -78,7 +79,10 @@ export class DraftPlaceBrowser {
         if (snapshot?.phase !== "connected" || !snapshot.client || !this.browserOpenValue) {
           return Promise.reject(new Error("Folder browser is unavailable"));
         }
-        return snapshot.client.request<FsListDirResult>("fs.listDir", path ? { path } : {});
+        return snapshot.client.request<FsListDirResult>("fs.listDir", {
+          ...(path ? { path } : {}),
+          ...(this.read().nodeId ? { nodeId: this.read().nodeId } : {}),
+        });
       },
       this.callbacks.requestUpdate,
       (listing) => {
@@ -86,7 +90,7 @@ export class DraftPlaceBrowser {
         this.callbacks.onApprovedListing(listing);
         const snapshot = this.read();
         const client = snapshot.context?.gateway.snapshot.client;
-        if (!snapshot.isAdmin || !client) {
+        if (!snapshot.isAdmin || !client || snapshot.nodeId) {
           return;
         }
         void client
@@ -309,18 +313,22 @@ export class DraftPlaceBrowser {
     workspaceRoots: readonly string[];
     isAdmin: boolean;
   }): ProjectRecent[] {
+    const nodeId = this.read().nodeId;
     const allowGatewayFolder = (folder: string) =>
       params.isAdmin || isKnownWorkspacePath(params.workspaceRoots, folder);
     const serverRecents = this.projectRecents?.filter((recent) =>
-      recent.kind === "project"
-        ? this.projects.some((project) => project.id === recent.projectId)
-        : recent.kind === "repository" || (!recent.execNode && allowGatewayFolder(recent.folder)),
+      nodeId
+        ? recent.kind === "folder" && recent.execNode === nodeId
+        : recent.kind === "project"
+          ? this.projects.some((project) => project.id === recent.projectId)
+          : recent.kind === "repository" || (!recent.execNode && allowGatewayFolder(recent.folder)),
     );
     return (
       serverRecents ??
       recentPlaces(params.sessions, {
         workspace: params.workspace,
         allowGatewayFolder,
+        execNode: nodeId,
       }).map<ProjectRecent>((recent) => ({
         kind: "folder",
         folder: recent.folder,
@@ -415,6 +423,7 @@ export class DraftPlaceBrowser {
       gatewaySnapshot?.phase !== "connected" ||
       !client ||
       !snapshot.isAdmin ||
+      snapshot.nodeId ||
       this.browserProjectPath !== path ||
       this.browserRegistering
     ) {

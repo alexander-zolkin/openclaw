@@ -146,6 +146,8 @@ export class PaletteSessionSettings {
       deviceId: place.deviceId,
       autoDevice: place.autoDevice,
       devicePlacement: place.devicePlacementRuntime()?.devicePlacement,
+      directDevicePlacement: place.isAdmin() ? place.directDeviceRequirement() : undefined,
+      directDeviceDisabledReason: gateway.deviceCatalogDisabledReason,
       deviceDisabledReason:
         place.modelControl.devicePlacementUnsupportedReason() ??
         gateway.deviceCatalogDisabledReason,
@@ -160,20 +162,21 @@ export class PaletteSessionSettings {
       .join(" · ");
     const projectState = resolveProjectChip({
       folder: place.folder,
-      workspace: place.workspacePath(),
+      workspace: place.folderWorkspacePath(),
       projectId: draft.browser.projectId,
       selectedRemoteProject: draft.browser.remoteProject,
-      projects: draft.browser.projects,
+      projects: place.directDevice ? [] : draft.browser.projects,
       recents: [],
       projectQuery: "",
       freshWorkspace: place.freshWorkspace,
+      folderOnly: place.directDevice,
     });
     const machines: MachineChoice[] = [
       {
         id: "local",
         label: gateway.gatewayName || t("newSession.local"),
         remote: false,
-        selected: !place.remotePlacement,
+        selected: !place.deviceId && !place.autoDevice && !place.cloudProfileId,
         select: () => place.selectDevice(""),
       },
       ...where.devices.map((device) => ({
@@ -213,9 +216,9 @@ export class PaletteSessionSettings {
       if (projectId) {
         place.selectProjectId(projectId);
       } else if (machine.remote) {
-        place.selectNewWorkspace();
+        if (!place.directDevice) place.selectNewWorkspace();
       } else {
-        place.applyFolder(place.workspacePath());
+        place.applyFolder(place.folderWorkspacePath());
       }
       onChange();
       void this.showPlaces(false);
@@ -227,9 +230,11 @@ export class PaletteSessionSettings {
         choices: [
           {
             id: "",
-            label: machine.remote
-              ? t("newSession.newWorkspace")
-              : pathDisplayName(place.workspacePath()) || t("newSession.folderPlaceholder"),
+            label: machine.id.startsWith("device:")
+              ? t("newSession.deviceHome")
+              : machine.remote
+                ? t("newSession.newWorkspace")
+                : pathDisplayName(place.workspacePath()) || t("newSession.folderPlaceholder"),
           },
           ...draft.browser.projects.map((project) => ({
             id: project.id,
@@ -308,7 +313,7 @@ export class PaletteSessionSettings {
                               : !draft.browser.projectId &&
                                 (machine.remote
                                   ? place.freshWorkspace
-                                  : place.folder === place.workspacePath()));
+                                  : place.folder === place.folderWorkspacePath()));
                           return html`<button
                             type="button"
                             class="palette-session-settings__row"
@@ -375,8 +380,8 @@ export class PaletteSessionSettings {
                           role="switch"
                           aria-checked=${String(place.worktree)}
                           aria-label=${t("newSession.checkoutWorktree")}
-                          title=${place.remotePlacement ? t("newSession.checkoutRemoteLocked") : !place.worktreeAvailable() ? t("newSession.gitCheckUnavailable") : nothing}
-                          ?disabled=${locked || place.remotePlacement}
+                          title=${place.remotePlacement && (!place.deviceId || !place.isAdmin()) ? t("newSession.checkoutRemoteLocked") : !place.worktreeAvailable() ? t("newSession.gitCheckUnavailable") : nothing}
+                          ?disabled=${locked || (place.remotePlacement && (!place.deviceId || !place.isAdmin()))}
                           @click=${() => {
                             place.selectWorktree(!place.worktree);
                             onChange();

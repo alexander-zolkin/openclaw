@@ -277,7 +277,10 @@ export function resolveNewSessionSubmitBlock(
     };
   }
   const deviceRuntimeUnsupportedReason = place.modelControl.devicePlacementUnsupportedReason();
-  if ((place.deviceId || place.autoDevice) && deviceRuntimeUnsupportedReason) {
+  if (
+    (place.autoDevice || (place.deviceId && !place.directDevice)) &&
+    deviceRuntimeUnsupportedReason
+  ) {
     return { gate: "device-runtime", reason: deviceRuntimeUnsupportedReason };
   }
   if (

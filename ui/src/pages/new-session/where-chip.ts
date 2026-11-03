@@ -61,16 +61,25 @@ export function resolveWhereChip(params: {
   deviceId: string;
   autoDevice?: boolean;
   devicePlacement?: DevicePlacementRequirement;
+  directDevicePlacement?: DevicePlacementRequirement;
+  directDeviceDisabledReason?: string;
   deviceDisabledReason?: string;
 }): WhereChipState {
-  const devices = projectDevicePlacements(
+  const managedDevices = projectDevicePlacements(
     params.environments,
     params.devicePlacement,
     params.deviceDisabledReason,
   );
+  const devices = params.directDevicePlacement
+    ? projectDevicePlacements(
+        params.environments,
+        params.directDevicePlacement,
+        params.directDeviceDisabledReason,
+      )
+    : managedDevices;
   const autoDeviceDisabledReason = resolveAutomaticDevicePlacementDisabledReason(
     params.environments,
-    devices,
+    managedDevices,
     params.deviceDisabledReason,
   );
   const device = devices.find((candidate) => candidate.deviceId === params.deviceId);

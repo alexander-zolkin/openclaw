@@ -187,6 +187,7 @@ export class NewSessionDraftController {
       () => ({
         context: read().context,
         isAdmin: this.place?.isAdmin() ?? false,
+        nodeId: this.place?.directDevice ? this.place.deviceId : undefined,
       }),
       {
         requestUpdate,

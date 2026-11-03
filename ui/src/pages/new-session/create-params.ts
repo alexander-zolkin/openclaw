@@ -54,6 +54,7 @@ export function buildDraftSessionCreateParams(draft: {
   baseRef?: string;
   worktreeName?: string;
   cwd?: string;
+  execNode?: string;
   workspace?: string;
   catalogId?: string;
   category?: string;
@@ -74,6 +75,7 @@ export function buildDraftSessionCreateParams(draft: {
     draft.deferInitialTurn && draft.visibility !== "incognito"
       ? truncateUtf16Safe(draft.message.trim(), 1_000)
       : undefined;
+  const execNode = normalizeOptionalString(draft.execNode);
   const emptyWorkspace = draft.worktreeSource === "empty";
   const repository = emptyWorkspace ? undefined : draft.repository;
   const projectId =
@@ -86,7 +88,12 @@ export function buildDraftSessionCreateParams(draft: {
       ? normalizeOptionalString(draft.projectGitUrl)
       : undefined;
   const customFolder =
-    !emptyWorkspace && !repository && !projectId && !projectGitUrl && cwd && cwd !== workspace
+    !emptyWorkspace &&
+    !repository &&
+    !projectId &&
+    !projectGitUrl &&
+    cwd &&
+    (execNode || cwd !== workspace)
       ? cwd
       : undefined;
   return {
@@ -114,6 +121,7 @@ export function buildDraftSessionCreateParams(draft: {
     ...(projectId ? { projectId } : {}),
     ...(projectGitUrl ? { projectGitUrl } : {}),
     ...(repository ? { repository: { ...repository } } : {}),
+    ...(execNode ? { execNode } : {}),
     ...(customFolder ? { cwd: customFolder } : {}),
     ...(emptyWorkspace ? { worktree: true, worktreeSource: "empty" as const } : {}),
     ...(draft.worktree && !repository && !emptyWorkspace
